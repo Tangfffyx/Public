@@ -1,5 +1,5 @@
 payload:
 - DOMAIN-SUFFIX,javdb.com
-- DOMAIN-SUFFIX,dmm.co.jp
-- DOMAIN-SUFFIX,mgstage.com
-- DOMAIN-SUFFIX,jdbstatic.com
+#- DOMAIN-SUFFIX,dmm.co.jp（美国
+#- DOMAIN-SUFFIX,jdbstatic.com（美国
+#- DOMAIN-SUFFIX,mgstage.com（日本
