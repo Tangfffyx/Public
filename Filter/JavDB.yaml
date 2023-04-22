@@ -3,5 +3,3 @@ payload:
 #视频
 - DOMAIN-SUFFIX,dmm.co.jp
 - DOMAIN-SUFFIX,jdbstatic.com
-#图片
-- DOMAIN-SUFFIX,mgstage.com
