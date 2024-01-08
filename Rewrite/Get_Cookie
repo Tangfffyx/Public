@@ -1,0 +1,6 @@
+
+hostname = apis.folidaymall.com
+
+[rewrite_local]
+#托迈酷客
+^https:\/\/apis\.folidaymall\.com\/online\/capi\/uc\/getCount url script-request-header https://raw.githubusercontent.com/FoKit/Scripts/main/scripts/ThomasCook.js
