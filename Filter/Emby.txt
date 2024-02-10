@@ -10,6 +10,7 @@ DOMAIN,front.gugumedia.link
 
 # 纸片人
 DOMAIN,embyplus.org
+IP-CIDR,89.58.18.111/24
 
 # 叔服
 DOMAIN,emby3.mcjoker.xyz
