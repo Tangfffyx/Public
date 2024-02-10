@@ -1,0 +1,19 @@
+# SYN and ntrrr
+DOMAIN,stream.synn.cc
+DOMAIN,stream.ntrrr.top
+DOMAIN,stream-zz.synn.cc
+
+# GUGU Media
+DOMAIN,main.gugumedia.link
+DOMAIN,pro.gugumedia.link
+DOMAIN,front.gugumedia.link
+
+# 纸片人
+DOMAIN,embyplus.org
+
+# 叔服
+DOMAIN,emby3.mcjoker.xyz
+DOMAIN,jz.mcjoker.xyz
+
+# Misty
+DOMAIN,misty.cx
