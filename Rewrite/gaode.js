@@ -1,80 +1,53 @@
-/*
-高德抢券
-仅QX测试
-
-抢购次数环境变量名称【gdgdgd】     gdgdgd = 50
-//如果不管默认抢50次，具体怎么手动设置次数，自己研究
-
-青龙Cookie环境变量     GD_Val = '{"userId":"xx","adiu":"xx","sessionid":"xx"}'
-
-Cookie获取/签到用这个脚本：https://raw.githubusercontent.com/wf021325/qx/master/task/ampDache.js
-
-====================================
-[task_local]
-1 0 * * * https://raw.githubusercontent.com/wf021325/qx/master/task/ampDacheCoupon.js, tag=高德抢券, enabled=true
-====================================
- */
-
-//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 const $ = new Env("高德抢券");
 const _key = 'GD_Val';
 var gdVal = $.getdata(_key) || ($.isNode() ? process.env[_key] : '');
 $.is_debug = ($.isNode() ? process.env.IS_DEDUG : $.getdata('is_debug')) || 'false';//false-true
 var message1 = '';
 
-!(async() => {
+!(async () => {
     if (gdVal != undefined) {
-        let obj = {userId,adiu,sessionid} = JSON.parse(gdVal)
-        if (sessionid.length < 30) {$.msg($.name, '', '❌请先获取sessionid🎉');return;}} else {$.msg($.name, '', '❌请先获取sessionid🎉');return;}
+        let obj = { userId, adiu, sessionid } = JSON.parse(gdVal)
+        if (sessionid.length < 30) { $.msg($.name, '', '❌请先获取sessionid🎉'); return; }
+    } else { $.msg($.name, '', '❌请先获取sessionid🎉'); return; }
 
-	intRSA();
-	intCryptoJS();
+    intRSA();
+    intCryptoJS();
     indMD5();
 
-    message1 += ----------高德抢券----------\n;
-    let {code,data,message} = await checkIn();
-    // console.log("调用 checkIn() 函数的结果：");
-    // console.log("code:", code);
-    // console.log("data:", data);
-    // console.log("message:", message);
+    message1 += '----------高德抢券----------\n';
+    let { code, data, message } = await checkIn();
 
-    if(code==1 && data?.rushBuyList.length>= 2 ){
-    let buyId;
+    if (code == 1 && data?.rushBuyList.length >= 2) {
+        let buyId;
         for (let i = 0; i < data.rushBuyList.length; i++) {
-            // console.log("标题:", data.rushBuyList[i].title);
             if (data.rushBuyList[i].title === "打车秒杀5元券") {
                 buyId = data.rushBuyList[i].id;
-                message1 += 查券:${data?.rushBuyList[i]?.title} - ${data?.rushBuyList[i]?.buttonText}\n;
+                message1 += `查券:${data?.rushBuyList[i]?.title} - ${data?.rushBuyList[i]?.buttonText}\n`;
                 break;
             }
         }
 
-        // console.log("data?.status:", buyId > 0 && data?.rushBuyList.find(item => item.id === buyId)?.status >= 3);
-        if(buyId > 0 && data?.rushBuyList.find(item => item.id === buyId)?.status < 3){
+        if (buyId > 0 && data?.rushBuyList.find(item => item.id === buyId)?.status < 3) {
             let a = $.getdata('gdgdgd') || 50;
             for (let i = 0; i < a; i++) {
-                let {code,data,cnMessage} = await signIn(buyId);
-                if(code==1){
-                    message1 += $.time('HH:mm:ss.S')+` 抢券${i+1}次:${data?.productName} - ${data?.title}\n`;
-                    // console.log(`抢券${i + 1}次成功:`, data?.productName, '-', data?.title);
-
-                }else {
-                    message1 += $.time('HH:mm:ss.S')+` 抢券${i+1}次:${cnMessage}\n`;
-                    // console.log(`抢券${i + 1}次失败:`, cnMessage);
-
+                let { code, data, cnMessage } = await signIn(buyId);
+                if (code == 1) {
+                    message1 += $.time('HH:mm:ss.S') + ` 抢券${i + 1}次:${data?.productName} - ${data?.title}\n`;
+                } else {
+                    message1 += $.time('HH:mm:ss.S') + ` 抢券${i + 1}次:${cnMessage}\n`;
                 }
             }
         }
-    }else if(code==14){
-        message1 += 查券:sessionid失效请重新获取\n;
+    } else if (code == 14) {
+        message1 += '查券:sessionid失效请重新获取\n';
     }
-    
+
     console.log(message1);//node,青龙日志
     await SendMsg(message1);
 
 })()
-    .catch((e) => {$.log("", `❌失败! 原因: ${e}!`, "");})
-    .finally(() => {$.done();});
+    .catch((e) => { $.log("", `❌失败! 原因: ${e}!`, ""); })
+    .finally(() => { $.done(); });
 
 function getKey() {
     for (var t = 'ABCDEFGHJKMNPQRSTWXYZabcdefhijkmnprstwxyz2345678', n = t.length, r = "", i = 0; i < 16; i++)
@@ -85,7 +58,7 @@ function getSign(id) {
     const sign = 'h5_common' + id + '@oEEln6dQJK7lRfGxQjlyGthZ4loXcRHR'
     return md5(sign).toUpperCase()
 }
-function getBody(body,key) {
+function getBody(body, key) {
     body = 'in=' + encodeURIComponent(Encrypt_Body(Json2Form(body), key));
     return body
 }
@@ -119,7 +92,7 @@ function getBuylistBody(adiu, userId, sign) {
     }
 }
 function getSigBody(adiu, userId, sign, rightid) {
-    return{
+    return {
         "bizVersion": "060305",
         "h5version": "6.35.14",
         "platform": "ios",
@@ -148,10 +121,10 @@ async function checkIn() {
     xck = encodeURIComponent(RSA_Public_Encrypt(key));
     sign = getSign(userId);
     _in = encodeURIComponent(Encrypt_Body("channel=h5_common&sign=" + sign + "&uid=" + userId, key));
-    url='https://m5-zb.amap.com/ws/vip/rush-buy-list?adiu=' + adiu + '&node=wechatMP&env=prod&xck_channel=default&xck=' + xck + '&in=' + _in;
-    body = getBody(getBuylistBody(adiu, userId, sign),key);
+    url = 'https://m5-zb.amap.com/ws/vip/rush-buy-list?adiu=' + adiu + '&node=wechatMP&env=prod&xck_channel=default&xck=' + xck + '&in=' + _in;
+    body = getBody(getBuylistBody(adiu, userId, sign), key);
     headers = getHeaders(sessionid);
-    const rest = {url: url,body: body,headers: headers,method: "post"};
+    const rest = { url: url, body: body, headers: headers, method: "post" };
     return await httpRequest(rest);
 }
 
@@ -160,13 +133,12 @@ async function signIn(rightid) {
     xck = encodeURIComponent(RSA_Public_Encrypt(key));
     sign = getSign(rightid);
     _in = encodeURIComponent(Encrypt_Body('channel=h5_common&rightid=' + rightid + '&sign=' + sign, key));
-    url='https://m5-zb.amap.com/ws/vip/exchange-right?adiu=' + adiu + '&node=wechatMP&env=prod&xck_channel=default&xck=' + xck + '&in=' + _in;
-    body = getBody(getSigBody(adiu, userId, sign, rightid),key);
+    url = 'https://m5-zb.amap.com/ws/vip/exchange-right?adiu=' + adiu + '&node=wechatMP&env=prod&xck_channel=default&xck=' + xck + '&in=' + _in;
+    body = getBody(getSigBody(adiu, userId, sign, rightid), key);
     headers = getHeaders(sessionid);
-    const rest = {url: url,body: body,headers: headers,method: "post"};
+    const rest = { url: url, body: body, headers: headers, method: "post" };
     return await httpRequest(rest);
 }
-
 
 //通知
 async function SendMsg(message){$.isNode()?await notify.sendNotify($.name,message):$.msg($.name,"",message);}
