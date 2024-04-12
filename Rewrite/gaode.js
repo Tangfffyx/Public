@@ -121,7 +121,7 @@ async function checkIn() {
     xck = encodeURIComponent(RSA_Public_Encrypt(key));
     sign = getSign(userId);
     _in = encodeURIComponent(Encrypt_Body("channel=h5_common&sign=" + sign + "&uid=" + userId, key));
-    url = 'https://m5.amap.com/ws/vip/rush-buy-list?adiu=' + adiu + '&node=wechatMP&env=prod&xck_channel=default&xck=' + xck + '&in=' + _in;
+    url = 'https://m5-zb.amap.com/ws/vip/rush-buy-list?adiu=' + adiu + '&node=wechatMP&env=prod&xck_channel=default&xck=' + xck + '&in=' + _in;
     body = getBody(getBuylistBody(adiu, userId, sign), key);
     headers = getHeaders(sessionid);
     const rest = { url: url, body: body, headers: headers, method: "post" };
@@ -133,7 +133,7 @@ async function signIn(rightid) {
     xck = encodeURIComponent(RSA_Public_Encrypt(key));
     sign = getSign(rightid);
     _in = encodeURIComponent(Encrypt_Body('channel=h5_common&rightid=' + rightid + '&sign=' + sign, key));
-    url = 'https://m5.amap.com/ws/vip/exchange-right?adiu=' + adiu + '&node=wechatMP&env=prod&xck_channel=default&xck=' + xck + '&in=' + _in;
+    url = 'https://m5-zb.amap.com/ws/vip/exchange-right?adiu=' + adiu + '&node=wechatMP&env=prod&xck_channel=default&xck=' + xck + '&in=' + _in;
     body = getBody(getSigBody(adiu, userId, sign, rightid), key);
     headers = getHeaders(sessionid);
     const rest = { url: url, body: body, headers: headers, method: "post" };
