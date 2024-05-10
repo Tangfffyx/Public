@@ -1,26 +1,30 @@
-# SYN and ntrrr
-DOMAIN,stream.synn.cc
-DOMAIN,stream.ntrrr.top
-DOMAIN,stream-zz.synn.cc
-
 # GUGU Media
-DOMAIN,main.gugumedia.link
-DOMAIN,pro.gugumedia.link
-DOMAIN,front.gugumedia.link
+DOMAIN-SUFFIX,gugumedia.link
+DOMAIN-SUFFIX,gugu.media
 
 # 纸片人
-DOMAIN,embyplus.org
-IP-CIDR,89.58.18.111/24
+DOMAIN-SUFFIX,embyplus.org
+DOMAIN-SUFFIX,9521732.xyz
+
+# TreeDiagramGroup
+DOMAIN-SUFFIX,123456.al
+
+# StarCat
+DOMAIN-SUFFIX,starcat.eu.org
+DOMAIN-SUFFIX,catlinks.co.uk
+DOMAIN-SUFFIX,oreoc.net
+DOMAIN-SUFFIX,887711.xyz
+
+# TheEnd阿甘服
+DOMAIN-SUFFIX,889393.xyz
+
+# 🍑桃子公益服
+IP-CIDR, 193.123.232.141/32
+IP-CIDR, 168.138.45.100/32
+DOMAIN-SUFFIX,embymv.tk
 
 # 叔服
-DOMAIN,emby3.mcjoker.xyz
-DOMAIN,jz.mcjoker.xyz
+DOMAIN-SUFFIX,mcjoker.xyz
 
 # Misty
-DOMAIN,misty.cx
-
-# 树状图TreeDiagramGroup
-DOMAIN,789.123456.al
-
-# 桃子
-DOMAIN,embymv.tk
+DOMAIN-SUFFIX,misty.cx
