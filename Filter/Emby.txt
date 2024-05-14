@@ -33,4 +33,4 @@ DOMAIN-SUFFIX,misty.cx
 DOMAIN-SUFFIX,10101.io
 
 # PiliPili
-DOMAIN-KEYWORD,pilipiliultra
+DOMAIN-KEYWORD,pilipili
