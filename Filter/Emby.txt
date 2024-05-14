@@ -31,3 +31,6 @@ DOMAIN-SUFFIX,misty.cx
 
 # FunMedia
 DOMAIN-SUFFIX,10101.io
+
+# PiliPili
+DOMAIN-KEYWORD,pilipiliultra
