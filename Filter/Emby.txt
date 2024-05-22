@@ -1,12 +1,12 @@
-# GUGU Media
+# GUGU Media（main美国犹他州
 DOMAIN-SUFFIX,gugumedia.link
 DOMAIN-SUFFIX,gugu.media
 
-# 纸片人
+# 纸片人 (美国加利福尼亚
 DOMAIN-SUFFIX,embyplus.org
 DOMAIN-SUFFIX,9521732.xyz
 
-# TreeDiagramGroup
+# TreeDiagramGroup（美国加利福尼亚
 DOMAIN-SUFFIX,123456.al
 
 # StarCat
@@ -18,7 +18,7 @@ DOMAIN-SUFFIX,887711.xyz
 # TheEnd阿甘服
 DOMAIN-SUFFIX,889393.xyz
 
-# 🍑桃子公益服
+# 🍑桃子公益服（线路1韩国首尔 线路2日本大阪
 IP-CIDR, 193.123.232.141/32
 IP-CIDR, 168.138.45.100/32
 DOMAIN-SUFFIX,embymv.tk
@@ -26,10 +26,10 @@ DOMAIN-SUFFIX,embymv.tk
 # 叔服
 DOMAIN-SUFFIX,mcjoker.xyz
 
-# Misty
+# Misty（美国华盛顿
 DOMAIN-SUFFIX,misty.cx
 
-# FunMedia
+# FunMedia（主服德国拜仁
 DOMAIN-SUFFIX,10101.io
 
 # PiliPili
@@ -38,9 +38,9 @@ DOMAIN-KEYWORD,pilipili
 # Heisi
 DOMAIN-SUFFIX,i109.com
 
-# CC公益
+# CC公益（美国加利福尼亚
 DOMAIN-SUFFIX,coemn.com
 DOMAIN-SUFFIX,carryz.net
 
-# 土拨鼠
+# 土拨鼠（韩国首尔
 DOMAIN-SUFFIX,20120714.xyz
