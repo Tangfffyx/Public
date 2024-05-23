@@ -18,13 +18,19 @@ DOMAIN-SUFFIX,887711.xyz
 # TheEnd阿甘服
 DOMAIN-SUFFIX,889393.xyz
 
-# 🍑桃子公益服（线路1韩国首尔 线路2日本大阪
+# 🍑桃子公益服
+// 韩国首尔
 IP-CIDR, 193.123.232.141/32
+// 日本大阪
 IP-CIDR, 168.138.45.100/32
 DOMAIN-SUFFIX,embymv.tk
 
 # 叔服
-DOMAIN-SUFFIX,mcjoker.xyz
+// 香港线路，直连
+DOMAIN,jz.mcjoker.xyz
+// 美国加利福尼亚
+DOMAIN,emby3.mcjoker.xyz
+
 
 # Misty（美国华盛顿
 DOMAIN-SUFFIX,misty.cx
@@ -32,10 +38,10 @@ DOMAIN-SUFFIX,misty.cx
 # FunMedia（主服德国拜仁
 DOMAIN-SUFFIX,10101.io
 
-# PiliPili
+# PiliPili（香港or美国？
 DOMAIN-KEYWORD,pilipili
 
-# Heisi
+# Heisi（美国加利福尼亚
 DOMAIN-SUFFIX,i109.com
 
 # CC公益（美国加利福尼亚
