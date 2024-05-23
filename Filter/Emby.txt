@@ -20,7 +20,11 @@ DOMAIN,jz.mcjoker.xyz,DIRECT
 # PiliPili（香港
 DOMAIN-KEYWORD,pilipili,DIRECT
 
-# FunMedia（甲骨文首尔
+# FunMedia
+// 德国拜仁
+DOMAIN,emby.funmedia.10101.io,DIRECT
+DOMAIN,netcup-v4.emby.funmedia.10101.io,DIRECT
+// 甲骨文首尔
 DOMAIN,oracle-kr.emby.funmedia.10101.io,DIRECT
 
 //---------代理--------
@@ -51,10 +55,6 @@ DOMAIN,emby3.mcjoker.xyz
 
 # Misty（美国华盛顿
 DOMAIN-SUFFIX,misty.cx
-
-# FunMedia（德国拜仁
-DOMAIN,emby.funmedia.10101.io
-DOMAIN,netcup-v4.emby.funmedia.10101.io
 
 # Heisi（美国加利福尼亚
 DOMAIN-SUFFIX,i109.com
