@@ -1,13 +1,36 @@
+//---------直连-----------
+
 # GUGU Media（main美国犹他州
-DOMAIN-SUFFIX,gugumedia.link
-DOMAIN-SUFFIX,gugu.media
+DOMAIN-SUFFIX,gugumedia.link,DIRECT
+DOMAIN-SUFFIX,gugu.media,DIRECT
+
+# StarCat
+DOMAIN-SUFFIX,starcat.eu.org,DIRECT
+DOMAIN-SUFFIX,catlinks.co.uk,DIRECT
+DOMAIN-SUFFIX,oreoc.net,DIRECT
+DOMAIN-SUFFIX,887711.xyz,DIRECT
+
+# TheEnd阿甘服
+DOMAIN-SUFFIX,889393.xyz,DIRECT
+
+# 叔服
+// 香港线路，直连
+DOMAIN,jz.mcjoker.xyz,DIRECT
+
+# PiliPili（香港
+DOMAIN-KEYWORD,pilipili,DIRECT
+
+# FunMedia（甲骨文首尔
+DOMAIN,oracle-kr.emby.funmedia.10101.io,DIRECT
+
+//---------代理--------
 
 # 纸片人
 // racknerd美国
 DOMAIN,chirsemby.top
 // Hyonix美国
 DOMAIN,hyonix.embyplus.org
-// 默认cloudflare挂代理，美国
+// 默认cloudflare挂代理
 DOMAIN-SUFFIX,9521732.xyz
 // 甲骨文春川
 DOMAIN,oracle-chuncheon1.embyplus.org
@@ -16,15 +39,6 @@ DOMAIN-SUFFIX,embyplus.org
 # TreeDiagramGroup（美国加利福尼亚
 DOMAIN-SUFFIX,123456.al
 
-# StarCat
-DOMAIN-SUFFIX,starcat.eu.org
-DOMAIN-SUFFIX,catlinks.co.uk
-DOMAIN-SUFFIX,oreoc.net
-DOMAIN-SUFFIX,887711.xyz
-
-# TheEnd阿甘服
-DOMAIN-SUFFIX,889393.xyz
-
 # 🍑桃子公益服
 // 韩国首尔
 IP-CIDR, 193.123.232.141/32
@@ -32,21 +46,15 @@ IP-CIDR, 193.123.232.141/32
 IP-CIDR, 168.138.45.100/32
 DOMAIN-SUFFIX,embymv.tk
 
-# 叔服
-// 香港线路，直连
-DOMAIN,jz.mcjoker.xyz
-// 美国加利福尼亚
+# 叔服（美国加利福尼亚
 DOMAIN,emby3.mcjoker.xyz
-
 
 # Misty（美国华盛顿
 DOMAIN-SUFFIX,misty.cx
 
-# FunMedia（主服德国拜仁
-DOMAIN-SUFFIX,10101.io
-
-# PiliPili（香港
-DOMAIN-KEYWORD,pilipili
+# FunMedia（德国拜仁
+DOMAIN,emby.funmedia.10101.io
+DOMAIN,netcup-v4.emby.funmedia.10101.io
 
 # Heisi（美国加利福尼亚
 DOMAIN-SUFFIX,i109.com
