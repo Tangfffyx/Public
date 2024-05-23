@@ -40,7 +40,7 @@ DOMAIN-SUFFIX,misty.cx
 # FunMedia（主服德国拜仁
 DOMAIN-SUFFIX,10101.io
 
-# PiliPili（香港or美国？
+# PiliPili（香港
 DOMAIN-KEYWORD,pilipili
 
 # Heisi（美国加利福尼亚
