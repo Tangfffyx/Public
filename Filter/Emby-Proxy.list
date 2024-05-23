@@ -14,25 +14,25 @@ DOMAIN,789.123456.al  //美国
 
 # CC公益
 DOMAIN,cc.coemn.com
-DOMAIN-SUFFIX,carryz.net  //自动选择线路（美国
+DOMAIN,dl.carryz.net  //自动选择线路（美国
 
 # 桃子
-DOMAIN-SUFFIX,embymv.tk
+DOMAIN,embymv.tk
 IP-CIDR, 193.123.232.141/32  // 韩国
 IP-CIDR, 168.138.45.100/32  // 日本
 
 # 土拨鼠
-DOMAIN-SUFFIX,20120714.xyz  //韩国
+DOMAIN,v.20120714.xyz  //韩国
 
 # 叔服
 DOMAIN,emby3.mcjoker.xyz  //美国
 
 # 纸片人
-DOMAIN-SUFFIX,embyplus.org
+DOMAIN,embyplus.org
 DOMAIN,gd.9521732.xyz //默认线路cloudflare（美国
 DOMAIN,oracle-chuncheon1.embyplus.org  //甲骨文春川
 DOMAIN,chirsemby.top  //racknerd（美国
 DOMAIN,hyonix.embyplus.org  //Hyonix（美国
 
 # 黑丝
-DOMAIN-SUFFIX,i109.com  //美国
+DOMAIN,i109.com  //美国
