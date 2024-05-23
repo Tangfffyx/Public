@@ -1,67 +1,54 @@
-//---------直连-----------
+# GuGu
+DOMAIN,main.gugumedia.link  //美国
+DOMAIN,main.gugu.media  //美国
+DOMAIN,v6.gugu.media  //香港
+DOMAIN,pro.gugumedia.link  //美国
+DOMAIN,front.gugumedia.link  //美国
+DOMAIN,pro.gugu.media  //美国
 
-# GUGU Media（main美国犹他州
-DOMAIN-SUFFIX,gugumedia.link,DIRECT
-DOMAIN-SUFFIX,gugu.media,DIRECT
-
-# StarCat
-DOMAIN-SUFFIX,starcat.eu.org,DIRECT
-DOMAIN-SUFFIX,catlinks.co.uk,DIRECT
-DOMAIN-SUFFIX,oreoc.net,DIRECT
-DOMAIN-SUFFIX,887711.xyz,DIRECT
+# 长东影业
+DOMAIN,emby.funmedia.10101.io  //德国
+DOMAIN,netcup-v4.emby.funmedia.10101.io  //德国
+DOMAIN,netcup-v6.emby.funmedia.10101.io  //德国
+DOMAIN,oracle-kr.emby.funmedia.10101.io  //韩国
 
 # TheEnd阿甘服
-DOMAIN-SUFFIX,889393.xyz,DIRECT
+DOMAIN,sss.889393.xyz
 
 # 叔服
-// 香港线路，直连
-DOMAIN,jz.mcjoker.xyz,DIRECT
+DOMAIN,jz.mcjoker.xyz  //香港
+DOMAIN,emby3.mcjoker.xyz  //美国
 
-# PiliPili（香港
-DOMAIN-KEYWORD,pilipili,DIRECT
+# PiliPili
+DOMAIN-KEYWORD,pilipili  //香港
 
-# FunMedia
-// 德国拜仁
-DOMAIN,emby.funmedia.10101.io,DIRECT
-DOMAIN,netcup-v4.emby.funmedia.10101.io,DIRECT
-// 甲骨文首尔
-DOMAIN,oracle-kr.emby.funmedia.10101.io,DIRECT
+# Misty
+DOMAIN,misty.cx  //美国
 
-//---------代理--------
+# TreeDiagramGroup
+DOMAIN,789.123456.al  //美国
+
+# 土拨鼠
+DOMAIN,v.20120714.xyz  //韩国
+
+# 黑丝
+DOMAIN,i109.com  //美国
+
+# 星猫
+DOMAIN,flare.catlinks.co.uk
 
 # 纸片人
-// racknerd美国
-DOMAIN,chirsemby.top
-// Hyonix美国
-DOMAIN,hyonix.embyplus.org
-// 默认cloudflare挂代理
-DOMAIN,gd.9521732.xyz
-// 甲骨文春川
-DOMAIN,oracle-chuncheon1.embyplus.org
-DOMAIN-SUFFIX,embyplus.org
+DOMAIN,embyplus.org
+DOMAIN,gd.9521732.xyz //默认线路cloudflare（美国
+DOMAIN,oracle-chuncheon1.embyplus.org  //甲骨文春川
+DOMAIN,chirsemby.top  //racknerd（美国
+DOMAIN,hyonix.embyplus.org  //Hyonix（美国
 
-# TreeDiagramGroup（美国加利福尼亚
-DOMAIN-SUFFIX,123456.al
+# CC
+DOMAIN,cc.coemn.com
+DOMAIN,dl.carryz.net  //自动选择线路（美国
 
-# 🍑桃子公益服
-// 韩国首尔
-IP-CIDR, 193.123.232.141/32
-// 日本大阪
-IP-CIDR, 168.138.45.100/32
-DOMAIN-SUFFIX,embymv.tk
-
-# 叔服（美国加利福尼亚
-DOMAIN,emby3.mcjoker.xyz
-
-# Misty（美国华盛顿
-DOMAIN-SUFFIX,misty.cx
-
-# Heisi（美国加利福尼亚
-DOMAIN-SUFFIX,i109.com
-
-# CC公益（美国加利福尼亚
-DOMAIN-SUFFIX,coemn.com
-DOMAIN-SUFFIX,carryz.net
-
-# 土拨鼠（韩国首尔
-DOMAIN-SUFFIX,20120714.xyz
+# 桃子
+DOMAIN,embymv.tk
+IP-CIDR, 193.123.232.141/32  // 韩国
+IP-CIDR, 168.138.45.100/32  // 日本
