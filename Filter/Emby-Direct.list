@@ -1,0 +1,19 @@
+# GuGu
+DOMAIN,main.gugumedia.link  //美国
+DOMAIN,main.gugu.media  //美国
+DOMAIN,v6.gugu.media  //香港
+
+# 长东影业
+DOMAIN,emby.funmedia.10101.io  //德国
+DOMAIN,netcup-v4.emby.funmedia.10101.io  //德国
+DOMAIN,netcup-v6.emby.funmedia.10101.io  //德国
+DOMAIN,oracle-kr.emby.funmedia.10101.io  //韩国
+
+# TheEnd阿甘服
+DOMAIN,sss.889393.xyz
+
+# 叔服
+DOMAIN,jz.mcjoker.xyz  //香港
+
+# PiliPili
+DOMAIN-KEYWORD,pilipili  //香港
