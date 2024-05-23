@@ -2,8 +2,10 @@
 DOMAIN-SUFFIX,gugumedia.link
 DOMAIN-SUFFIX,gugu.media
 
-# 纸片人 (美国加利福尼亚
+# 纸片人
 DOMAIN-SUFFIX,embyplus.org
+// 美国加利福尼亚
+DOMAIN-SUFFIX,chirsemby.top
 DOMAIN-SUFFIX,9521732.xyz
 
 # TreeDiagramGroup（美国加利福尼亚
