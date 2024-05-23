@@ -3,10 +3,15 @@ DOMAIN-SUFFIX,gugumedia.link
 DOMAIN-SUFFIX,gugu.media
 
 # 纸片人
-DOMAIN-SUFFIX,embyplus.org
-// 美国加利福尼亚
-DOMAIN-SUFFIX,chirsemby.top
+// racknerd美国
+DOMAIN,chirsemby.top
+// Hyonix美国
+DOMAIN,hyonix.embyplus.org
+// 默认cloudflare挂代理，美国
 DOMAIN-SUFFIX,9521732.xyz
+// 甲骨文春川
+DOMAIN,oracle-chuncheon1.embyplus.org
+DOMAIN-SUFFIX,embyplus.org
 
 # TreeDiagramGroup（美国加利福尼亚
 DOMAIN-SUFFIX,123456.al
