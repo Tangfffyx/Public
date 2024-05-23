@@ -35,7 +35,7 @@ DOMAIN,chirsemby.top
 // Hyonix美国
 DOMAIN,hyonix.embyplus.org
 // 默认cloudflare挂代理
-DOMAIN-SUFFIX,9521732.xyz
+DOMAIN,gd.9521732.xyz
 // 甲骨文春川
 DOMAIN,oracle-chuncheon1.embyplus.org
 DOMAIN-SUFFIX,embyplus.org
