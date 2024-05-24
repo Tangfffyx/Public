@@ -38,6 +38,8 @@ DOMAIN,v.20120714.xyz  //韩国
 # 黑丝
 DOMAIN,i109.com  //美国
 
+#––––––––––––––前后端分离––––––––––––
+
 # 星猫
 DOMAIN,flare.catlinks.co.uk  //前端
 DOMAIN,cdsalw2lw.catlinks.co.uk  //普通线路 198ms
@@ -60,6 +62,7 @@ DOMAIN-SUFFIX,starcat.eu.org  //兜底
 DOMAIN,emby.pilipiliultra.top  //前端（美国
 DOMAIN,emby.pilipiliultra.com  //前端（美国
 DOMAIN,stream_pilipili.misakaf.org  //美国
+DOMAIN-KEYWORD,pilipili  //兜底
 
 # 纸片人
 DOMAIN,embyplus.org  //前端
@@ -67,10 +70,15 @@ DOMAIN,gd.9521732.xyz //默认线路cloudflare（美国
 DOMAIN,oracle-chuncheon1.embyplus.org  //甲骨文春川
 DOMAIN,chirsemby.top  //racknerd（美国
 DOMAIN,hyonix.embyplus.org  //Hyonix（美国
+DOMAIN-SUFFIX,9521732.xyz  //兜底
+DOMAIN-SUFFIX,embyplus.org  //兜底
+DOMAIN-SUFFIX,chirsemby.top  //兜底
 
 # CC
 DOMAIN,cc.coemn.com  //前端（新加坡
 DOMAIN,dl.carryz.net  //自动选择线路（美国
+DOMAIN-SUFFIX,coemn.com  //兜底
+DOMAIN-SUFFIX,carryz.net  //兜底
 
 # 桃子
 DOMAIN,embymv.tk  //前端（韩国
