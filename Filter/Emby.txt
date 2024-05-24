@@ -1,10 +1,17 @@
+# SYN
+DOMAIN,stream.synn.cc
+DOMAIN,stream-zz.synn.cc
+
+# ntrrr
+DOMAIN,stream.ntrrr.top  //美国
+
 # GuGu
 DOMAIN,main.gugumedia.link  //美国
-DOMAIN,main.gugu.media  //美国
-DOMAIN,v6.gugu.media  //香港
 DOMAIN,pro.gugumedia.link  //美国
 DOMAIN,front.gugumedia.link  //美国
+DOMAIN,main.gugu.media  //美国
 DOMAIN,pro.gugu.media  //美国
+DOMAIN,v6.gugu.media  //香港
 
 # 长东影业
 DOMAIN,emby.funmedia.10101.io  //德国
@@ -13,19 +20,21 @@ DOMAIN,netcup-v6.emby.funmedia.10101.io  //德国
 DOMAIN,oracle-kr.emby.funmedia.10101.io  //韩国
 
 # TheEnd阿甘服
-DOMAIN,sss.889393.xyz
+DOMAIN,sss.889393.xyz  //浙江
 
 # 叔服
 DOMAIN,jz.mcjoker.xyz  //香港
 DOMAIN,emby3.mcjoker.xyz  //美国
 
 # PiliPili
-DOMAIN-KEYWORD,pilipili  //香港
+DOMAIN,emby.pilipiliultra.top  //前端（美国
+DOMAIN,emby.pilipiliultra.com  //前端（美国
+DOMAIN,stream_pilipili.misakaf.org  //美国
 
 # Misty
 DOMAIN,misty.cx  //美国
 
-# TreeDiagramGroup
+# 树状图
 DOMAIN,789.123456.al  //美国
 
 # 土拨鼠
@@ -38,17 +47,17 @@ DOMAIN,i109.com  //美国
 DOMAIN,flare.catlinks.co.uk
 
 # 纸片人
-DOMAIN,embyplus.org
+DOMAIN,embyplus.org  //前端
 DOMAIN,gd.9521732.xyz //默认线路cloudflare（美国
 DOMAIN,oracle-chuncheon1.embyplus.org  //甲骨文春川
 DOMAIN,chirsemby.top  //racknerd（美国
 DOMAIN,hyonix.embyplus.org  //Hyonix（美国
 
 # CC
-DOMAIN,cc.coemn.com
+DOMAIN,cc.coemn.com  //前端（新加坡
 DOMAIN,dl.carryz.net  //自动选择线路（美国
 
 # 桃子
-DOMAIN,embymv.tk
+DOMAIN,embymv.tk  //前端（韩国
 IP-CIDR, 193.123.232.141/32  // 韩国
 IP-CIDR, 168.138.45.100/32  // 日本
