@@ -84,3 +84,4 @@ DOMAIN-SUFFIX,carryz.net  //兜底
 DOMAIN,embymv.tk  //前端（韩国
 IP-CIDR, 193.123.232.141/32  // 韩国
 IP-CIDR, 168.138.45.100/32  // 日本
+DOMAIN-SUFFIX,embymv.tk  //兜底
