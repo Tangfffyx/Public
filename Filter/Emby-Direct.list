@@ -1,22 +1,28 @@
 # GuGu
+DOMAIN,main.gugumedia.link  //美国
+DOMAIN,pro.gugumedia.link  //美国
+DOMAIN,front.gugumedia.link  //美国
+DOMAIN,main.gugu.media  //美国
+DOMAIN,pro.gugu.media  //美国
 DOMAIN,v6.gugu.media  //香港
-
-# 长东影业
-DOMAIN,emby.funmedia.10101.io  //德国
-DOMAIN,netcup-v4.emby.funmedia.10101.io  //德国
-DOMAIN,netcup-v6.emby.funmedia.10101.io  //德国
-DOMAIN,oracle-kr.emby.funmedia.10101.io  //韩国
 
 # TheEnd阿甘服
 DOMAIN,sss.889393.xyz  //浙江
 
-# 叔服
-DOMAIN,jz.mcjoker.xyz  //香港
-
-# PiliPili
-DOMAIN,emby.pilipiliultra.top  //前端（美国
-DOMAIN,emby.pilipiliultra.com  //前端（美国
-DOMAIN,stream_pilipili.misakaf.org  //美国
-
-# 黑丝
-DOMAIN,i109.com  //美国
+# 星猫
+DOMAIN,flare.catlinks.co.uk  //前端
+DOMAIN,cdsalw2lw.catlinks.co.uk  //普通线路 198ms
+DOMAIN,shuigawd921hfs-ef27893hrsf.catlinks.co.uk  //Pro line 134ms
+DOMAIN,wsjqi279-jsbe-wiooe13-wuie.catlinks.co.uk  //Global 连不通
+DOMAIN,starcat-gshou.887711.xyz  //Ultra line 193ms
+DOMAIN,emby.oreoc.net  //Sharon HK 连不通
+DOMAIN,wu2qu382uwb2y431-wxbki2.catlink.eu.org  //Oracle JP 连不通
+DOMAIN,sckxe.starcat.eu.org  //Hong Kong 连不通
+//CN2 无线路
+//CN 无线路
+DOMAIN,shuigawd921hfs-ef27893hrsf.catlinks.co.uk  //Asia 连不通
+DOMAIN-SUFFIX,catlinks.co.uk  //兜底
+DOMAIN-SUFFIX,887711.xyz  //兜底
+DOMAIN-SUFFIX,oreoc.net  //兜底
+DOMAIN-SUFFIX,catlink.eu.org  //兜底
+DOMAIN-SUFFIX,starcat.eu.org  //兜底
