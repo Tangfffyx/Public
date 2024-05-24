@@ -26,11 +26,6 @@ DOMAIN,sss.889393.xyz  //浙江
 DOMAIN,jz.mcjoker.xyz  //香港
 DOMAIN,emby3.mcjoker.xyz  //美国
 
-# PiliPili
-DOMAIN,emby.pilipiliultra.top  //前端（美国
-DOMAIN,emby.pilipiliultra.com  //前端（美国
-DOMAIN,stream_pilipili.misakaf.org  //美国
-
 # Misty
 DOMAIN,misty.cx  //美国
 
@@ -44,7 +39,27 @@ DOMAIN,v.20120714.xyz  //韩国
 DOMAIN,i109.com  //美国
 
 # 星猫
-DOMAIN,flare.catlinks.co.uk
+DOMAIN,flare.catlinks.co.uk  //前端
+DOMAIN,cdsalw2lw.catlinks.co.uk  //普通线路 198ms
+DOMAIN,shuigawd921hfs-ef27893hrsf.catlinks.co.uk  //Pro line 134ms
+DOMAIN,wsjqi279-jsbe-wiooe13-wuie.catlinks.co.uk  //Global 连不通
+DOMAIN,starcat-gshou.887711.xyz  //Ultra line 193ms
+DOMAIN,emby.oreoc.net  //Sharon HK 连不通
+DOMAIN,wu2qu382uwb2y431-wxbki2.catlink.eu.org  //Oracle JP 连不通
+DOMAIN,sckxe.starcat.eu.org  //Hong Kong 连不通
+//CN2 无线路
+//CN 无线路
+DOMAIN,shuigawd921hfs-ef27893hrsf.catlinks.co.uk  //Asia 连不通
+DOMAIN-SUFFIX,catlinks.co.uk  //兜底
+DOMAIN-SUFFIX,887711.xyz  //兜底
+DOMAIN-SUFFIX,oreoc.net  //兜底
+DOMAIN-SUFFIX,catlink.eu.org  //兜底
+DOMAIN-SUFFIX,starcat.eu.org  //兜底
+
+# PiliPili
+DOMAIN,emby.pilipiliultra.top  //前端（美国
+DOMAIN,emby.pilipiliultra.com  //前端（美国
+DOMAIN,stream_pilipili.misakaf.org  //美国
 
 # 纸片人
 DOMAIN,embyplus.org  //前端
