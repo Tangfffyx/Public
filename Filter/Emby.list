@@ -3,86 +3,124 @@ DOMAIN,stream.synn.cc
 DOMAIN,stream-zz.synn.cc
 
 # ntrrr
-DOMAIN,stream.ntrrr.top  //美国
+DOMAIN,stream.ntrrr.top
 
 # GuGu
-DOMAIN,main.gugumedia.link  //美国
-DOMAIN,pro.gugumedia.link  //美国
-DOMAIN,front.gugumedia.link  //美国
-DOMAIN,main.gugu.media  //美国
-DOMAIN,pro.gugu.media  //美国
-DOMAIN,v6.gugu.media  //香港
+  #-->美国
+DOMAIN,main.gugumedia.link
+DOMAIN,pro.gugumedia.link
+DOMAIN,front.gugumedia.link
+DOMAIN,main.gugu.media
+DOMAIN,pro.gugu.media
+  #-->香港
+DOMAIN,v6.gugu.media
 
 # 长东影业
-DOMAIN,emby.funmedia.10101.io  //德国
-DOMAIN,netcup-v4.emby.funmedia.10101.io  //德国
-DOMAIN,netcup-v6.emby.funmedia.10101.io  //德国
-DOMAIN,oracle-kr.emby.funmedia.10101.io  //韩国
-DOMAIN,funmedia.10101.io  //德国
+  #-->德国
+DOMAIN,emby.funmedia.10101.io
+DOMAIN,netcup-v4.emby.funmedia.10101.io
+DOMAIN,netcup-v6.emby.funmedia.10101.io
+DOMAIN,funmedia.10101.io
+  #-->韩国
+DOMAIN,oracle-kr.emby.funmedia.10101.io
+
 
 # TheEnd阿甘服
-DOMAIN,sss.889393.xyz  //浙江
+  #-->浙江
+DOMAIN,sss.889393.xyz
 
 # 叔服
-DOMAIN,jz.mcjoker.xyz  //香港
-DOMAIN,emby3.mcjoker.xyz  //美国
+  #-->香港
+DOMAIN,jz.mcjoker.xyz
+  #-->美国
+DOMAIN,emby3.mcjoker.xyz
 
 # Misty
-DOMAIN,misty.cx  //美国
+  #-->美国
+DOMAIN,misty.cx
 
 # 树状图
-DOMAIN,789.123456.al  //美国
+  #-->美国
+DOMAIN,789.123456.al
 
 # 土拨鼠
-DOMAIN,v.20120714.xyz  //韩国
+  #-->韩国
+DOMAIN,v.20120714.xyz
 
 # 黑丝
-DOMAIN,i109.com  //美国
+  #-->美国
+DOMAIN,i109.com
 
 #––––––––––––––前后端分离––––––––––––
 
 # 星猫
-DOMAIN,flare.catlinks.co.uk  //前端
-DOMAIN,cdsalw2lw.catlinks.co.uk  //普通线路
-DOMAIN,shuigawd921hfs-ef27893hrsf.catlinks.co.uk  //Pro line
-DOMAIN,wsjqi279-jsbe-wiooe13-wuie.catlinks.co.uk  //Global 连不通
-DOMAIN,starcat-gshou.887711.xyz  //Ultra line
-DOMAIN,emby.oreoc.net  //Sharon HK 连不通
-DOMAIN,wu2qu382uwb2y431-wxbki2.catlink.eu.org  //Oracle JP 连不通
-DOMAIN,sckxe.starcat.eu.org  //Hong Kong 连不通
-//CN2 无线路
-//CN 无线路
-DOMAIN,shuigawd921hfs-ef27893hrsf.catlinks.co.uk  //Asia 连不通
-DOMAIN-SUFFIX,catlinks.co.uk  //兜底
-DOMAIN-SUFFIX,887711.xyz  //兜底
-DOMAIN-SUFFIX,oreoc.net  //兜底
-DOMAIN-SUFFIX,catlink.eu.org  //兜底
-DOMAIN-SUFFIX,starcat.eu.org  //兜底
+  #-->前端
+DOMAIN,flare.catlinks.co.uk
+  #-->普通线路
+DOMAIN,cdsalw2lw.catlinks.co.uk
+  #-->Pro line
+DOMAIN,shuigawd921hfs-ef27893hrsf.catlinks.co.uk
+  #-->Global
+DOMAIN,wsjqi279-jsbe-wiooe13-wuie.catlinks.co.uk
+  #-->Ultra line
+DOMAIN,starcat-gshou.887711.xyz
+  #-->Sharon HK
+DOMAIN,emby.oreoc.net
+  #-->Oracle JP
+DOMAIN,wu2qu382uwb2y431-wxbki2.catlink.eu.org
+  #-->Hong Kong
+DOMAIN,sckxe.starcat.eu.org
+  #-->CN2
+  #-->CN
+  #-->Asia
+DOMAIN,shuigawd921hfs-ef27893hrsf.catlinks.co.uk
+  #-->兜底
+DOMAIN-SUFFIX,catlinks.co.uk
+DOMAIN-SUFFIX,887711.xyz
+DOMAIN-SUFFIX,oreoc.net
+DOMAIN-SUFFIX,catlink.eu.org
+DOMAIN-SUFFIX,starcat.eu.org
 
 # PiliPili
-DOMAIN,emby.pilipiliultra.top  //前端（美国
-DOMAIN,emby.pilipiliultra.com  //前端（美国
-DOMAIN,stream_pilipili.misakaf.org  //美国
-DOMAIN-KEYWORD,pilipili  //兜底
+  #-->前端（美国
+DOMAIN,emby.pilipiliultra.top
+DOMAIN,emby.pilipiliultra.com
+  #-->美国
+DOMAIN,stream_pilipili.misakaf.org
+  #-->兜底
+DOMAIN-KEYWORD,pilipili
 
 # 纸片人
-DOMAIN,embyplus.org  //前端
-DOMAIN,gd.9521732.xyz //cloudflare（美国
-DOMAIN,oracle-chuncheon1.embyplus.org  //甲骨文春川
-DOMAIN,chirsemby.top  //racknerd（美国
-DOMAIN,hyonix.embyplus.org  //Hyonix（美国
-DOMAIN-SUFFIX,9521732.xyz  //兜底
-DOMAIN-SUFFIX,embyplus.org  //兜底
-DOMAIN-SUFFIX,chirsemby.top  //兜底
+  #-->前端
+DOMAIN,embyplus.org
+  #-->cloudflare（美国
+DOMAIN,gd.9521732.xyz
+  #-->甲骨文春川
+DOMAIN,oracle-chuncheon1.embyplus.org
+  #-->racknerd（美国
+DOMAIN,chirsemby.top
+  #-->Hyonix（美国
+DOMAIN,hyonix.embyplus.org
+  #-->兜底
+DOMAIN-SUFFIX,9521732.xyz
+DOMAIN-SUFFIX,embyplus.org
+DOMAIN-SUFFIX,chirsemby.top
 
 # CC
-DOMAIN,cc.coemn.com  //前端（新加坡
-DOMAIN,dl.carryz.net  //自动选择（美国
-DOMAIN-SUFFIX,coemn.com  //兜底
-DOMAIN-SUFFIX,carryz.net  //兜底
+  #-->前端（新加坡
+DOMAIN,cc.coemn.com
+  #-->自动选择（美国
+DOMAIN,dl.carryz.net
+  #-->兜底
+DOMAIN-SUFFIX,coemn.com
+DOMAIN-SUFFIX,carryz.net
 
 # 桃子
-DOMAIN,embymv.tk  //前端（韩国
-IP-CIDR, 193.123.232.141/32  // 线路一(韩国
-IP-CIDR, 168.138.45.100/32  // 线路二(日本
-DOMAIN-SUFFIX,embymv.tk  //兜底
+  #-->前端（韩国
+DOMAIN,embymv.tk
+  #-->线路一（韩国
+IP-CIDR, 193.123.232.141/32
+  #-->线路二（日本
+IP-CIDR, 168.138.45.100/32
+  #-->兜底
+DOMAIN-SUFFIX,embymv.tk
