@@ -9,6 +9,14 @@ DOMAIN,v6.gugu.media  //香港
 # TheEnd阿甘服
 DOMAIN,sss.889393.xyz  //浙江
 
+# 叔服
+DOMAIN,jz.mcjoker.xyz  //香港
+
+# 黑丝
+DOMAIN,i109.com  //美国
+
+#––––––––––––––前后端分离––––––––––––
+
 # 星猫
 DOMAIN,flare.catlinks.co.uk  //前端
 DOMAIN,cdsalw2lw.catlinks.co.uk  //普通线路
@@ -26,3 +34,9 @@ DOMAIN-SUFFIX,887711.xyz  //兜底
 DOMAIN-SUFFIX,oreoc.net  //兜底
 DOMAIN-SUFFIX,catlink.eu.org  //兜底
 DOMAIN-SUFFIX,starcat.eu.org  //兜底
+
+# PiliPili
+DOMAIN,emby.pilipiliultra.top  //前端（美国
+DOMAIN,emby.pilipiliultra.com  //前端（美国
+DOMAIN,stream_pilipili.misakaf.org  //美国
+DOMAIN-KEYWORD,pilipili  //兜底
