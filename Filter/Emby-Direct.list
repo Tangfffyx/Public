@@ -21,7 +21,7 @@ DOMAIN,jz.mcjoker.xyz
 # 星猫
   #-->前端
 DOMAIN,flare.catlinks.co.uk
-  #-->普通线路
+  #-->CloudFlare
 DOMAIN,cdsalw2lw.catlinks.co.uk
   #-->Pro line
 DOMAIN,shuigawd921hfs-ef27893hrsf.catlinks.co.uk
@@ -29,22 +29,12 @@ DOMAIN,shuigawd921hfs-ef27893hrsf.catlinks.co.uk
 DOMAIN,wsjqi279-jsbe-wiooe13-wuie.catlinks.co.uk
   #-->Ultra line
 DOMAIN,starcat-gshou.887711.xyz
-  #-->Sharon HK
-DOMAIN,emby.oreoc.net
-  #-->Oracle JP
-DOMAIN,wu2qu382uwb2y431-wxbki2.catlink.eu.org
-  #-->Hong Kong
-DOMAIN,sckxe.starcat.eu.org
-  #-->CN2
-  #-->CN
-  #-->Asia
-DOMAIN,shuigawd921hfs-ef27893hrsf.catlinks.co.uk
+  #-->Ultra CDN
+DOMAIN,dhs752jdkpq3ns.catlinks.co.uk
+  #-->CN（无
   #-->兜底
 DOMAIN-SUFFIX,catlinks.co.uk
 DOMAIN-SUFFIX,887711.xyz
-DOMAIN-SUFFIX,oreoc.net
-DOMAIN-SUFFIX,catlink.eu.org
-DOMAIN-SUFFIX,starcat.eu.org
 
 # PiliPili（待定，晚高峰直连4k偶尔卡
   #-->前端（美国
