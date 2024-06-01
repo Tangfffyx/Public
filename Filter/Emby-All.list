@@ -55,6 +55,12 @@ DOMAIN,v.20120714.xyz
   #-->美国
 DOMAIN,i109.com
 
+# 牢大
+  #-->美国V4
+DOMAIN,emby-us-v4.mius.uk
+  #-->法国V6
+DOMAIN,emby-fr-v6.mius.uk
+
 #––––––––––––––前后端分离––––––––––––
 
 # 星猫
