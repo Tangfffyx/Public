@@ -2,7 +2,6 @@
   #-->美国
 DOMAIN,main.gugumedia.link
 DOMAIN,pro.gugumedia.link
-DOMAIN,front.gugumedia.link
 DOMAIN,main.gugu.media
 DOMAIN,pro.gugu.media
   #-->香港
@@ -15,6 +14,12 @@ DOMAIN,sss.889393.xyz
 # 叔服
   #-->香港
 DOMAIN,jz.mcjoker.xyz
+
+# 终点站
+  #-->二妹（德国
+DOMIAN,pub2.emby.wtf
+  #-->三妹（加拿大
+DOMIAN,pub3.emby.wtf
 
 #––––––––––––––前后端分离––––––––––––
 
