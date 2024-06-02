@@ -61,6 +61,17 @@ DOMAIN,emby-us-v4.mius.uk
   #-->法国V6
 DOMAIN,emby-fr-v6.mius.uk
 
+# 终点站
+  #-->大妹
+DOMIAN,pub1.emby.wtf
+DOMIAN,pub1cf.emby.wtf
+  #-->二妹
+DOMIAN,pub2.emby.wtf
+DOMIAN,pub2cf.emby.wtf
+  #-->三妹
+DOMIAN,pub3.emby.wtf
+DOMIAN,pub3cf.emby.wtf
+
 #––––––––––––––前后端分离––––––––––––
 
 # 星猫
