@@ -63,14 +63,14 @@ DOMAIN,emby-fr-v6.mius.uk
 
 # 终点站
   #-->大妹（美国，CF美国
-DOMIAN,pub1.emby.wtf
-DOMIAN,pub1cf.emby.wtf
+DOMAIN,pub1.emby.wtf
+DOMAIN,pub1cf.emby.wtf
   #-->二妹（德国，CF美国
-DOMIAN,pub2.emby.wtf
-DOMIAN,pub2cf.emby.wtf
+DOMAIN,pub2.emby.wtf
+DOMAIN,pub2cf.emby.wtf
   #-->三妹（加拿大，CF美国
-DOMIAN,pub3.emby.wtf
-DOMIAN,pub3cf.emby.wtf
+DOMAIN,pub3.emby.wtf
+DOMAIN,pub3cf.emby.wtf
 
 #––––––––––––––前后端分离––––––––––––
 
