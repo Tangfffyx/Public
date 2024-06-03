@@ -24,28 +24,9 @@ DOMAIN,pub3.emby.wtf
 #––––––––––––––前后端分离––––––––––––
 
 # 星猫
-  #-->前端
-DOMAIN,flare.catlinks.co.uk
-  #-->CloudFlare
-DOMAIN,cdsalw2lw.catlinks.co.uk
   #-->Pro line
 DOMAIN,shuigawd921hfs-ef27893hrsf.catlinks.co.uk
-  #-->Global
-DOMAIN,wsjqi279-jsbe-wiooe13-wuie.catlinks.co.uk
   #-->Ultra line
 DOMAIN,starcat-gshou.887711.xyz
   #-->Ultra CDN
 DOMAIN,dhs752jdkpq3ns.catlinks.co.uk
-  #-->CN（无
-  #-->兜底
-DOMAIN-SUFFIX,catlinks.co.uk
-DOMAIN-SUFFIX,887711.xyz
-
-# PiliPili（待定，晚高峰直连4k偶尔卡
-  #-->前端（美国
-DOMAIN,emby.pilipiliultra.top
-DOMAIN,emby.pilipiliultra.com
-  #-->美国
-DOMAIN,stream_pilipili.misakaf.org
-  #-->兜底
-DOMAIN-KEYWORD,pilipili
