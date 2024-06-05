@@ -23,7 +23,8 @@ DOMAIN,netcup-v6.emby.funmedia.10101.io
 DOMAIN,funmedia.10101.io
   #-->韩国
 DOMAIN,oracle-kr.emby.funmedia.10101.io
-DOMAIN,plexdy.domob.org
+  #-->美国
+DOMAIN,funmedia.domob.org
 
 # TheEnd阿甘服
   #-->浙江
