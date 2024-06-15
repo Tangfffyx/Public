@@ -3,17 +3,19 @@ DOMAIN,stream.synn.cc
 DOMAIN,stream-zz.synn.cc
 
 # ntrrr
+  #-->CDN
 DOMAIN,stream.ntrrr.top
 
 # GuGu
   #-->美国
 DOMAIN,main.gugumedia.link
 DOMAIN,pro.gugumedia.link
-DOMAIN,front.gugumedia.link
 DOMAIN,main.gugu.media
 DOMAIN,pro.gugu.media
-  #-->香港
 DOMAIN,v6.gugu.media
+  #-->CDN
+DOMAIN,front.gugumedia.link
+
 
 # 长东影业
   #-->德国
@@ -27,7 +29,7 @@ DOMAIN,oracle-kr.emby.funmedia.10101.io
 DOMAIN,funmedia.domob.org
 
 # TheEnd阿甘服
-  #-->浙江
+  #-->中国
 DOMAIN,sss.889393.xyz
 
 # 大V
@@ -35,9 +37,8 @@ DOMAIN,sss.889393.xyz
 DOMAIN,su.viclub.top
 
 # 叔服
-  #-->香港
+  #-->美国（第一条线路直连，第二条挂梯
 DOMAIN,jz.mcjoker.xyz
-  #-->美国
 DOMAIN,emby3.mcjoker.xyz
 
 # Misty
@@ -45,7 +46,7 @@ DOMAIN,emby3.mcjoker.xyz
 DOMAIN,misty.cx
 
 # 树状图
-  #-->美国
+  #-->CDN
 DOMAIN,789.123456.al
 
 # 土拨鼠
@@ -59,51 +60,50 @@ DOMAIN,emby-us-v4.mius.uk
 DOMAIN,emby-fr-v6.mius.uk
 
 # 终点站
-  #-->大妹（美国，CF美国
+  #-->大妹（美国
 DOMAIN,pub1.emby.wtf
 DOMAIN,pub1cf.emby.wtf
-  #-->二妹（德国，CF美国
+  #-->二妹（德国
 DOMAIN,pub2.emby.wtf
 DOMAIN,pub2cf.emby.wtf
-  #-->三妹（加拿大，CF美国
+  #-->三妹（美国
 DOMAIN,pub3.emby.wtf
 DOMAIN,pub3cf.emby.wtf
 
 #––––––––––––––前后端分离––––––––––––
 
 # 星猫
-  #-->前端
+  #-->前端（CDN
 DOMAIN,flare.catlinks.co.uk
-  #-->CloudFlare
+  #-->cloudflare（CDN
 DOMAIN,cdsalw2lw.catlinks.co.uk
-  #-->Pro line
+  #-->Pro line（韩国
 DOMAIN,shuigawd921hfs-ef27893hrsf.catlinks.co.uk
-  #-->Global
+  #-->Global（美国
 DOMAIN,wsjqi279-jsbe-wiooe13-wuie.catlinks.co.uk
-  #-->Ultra line
+  #-->Ultra line（美国
 DOMAIN,starcat-gshou.887711.xyz
-  #-->Ultra CDN
+  #-->Ultra CDN（CDN
 DOMAIN,dhs752jdkpq3ns.catlinks.co.uk
-  #-->CN（无
   #-->兜底
 DOMAIN-SUFFIX,catlinks.co.uk
 DOMAIN-SUFFIX,887711.xyz
 
 # PiliPili
-  #-->前端（美国
+  #-->前端（top是美国，com是CDN
 DOMAIN,emby.pilipiliultra.top
 DOMAIN,emby.pilipiliultra.com
-  #-->美国
+  #-->CDN
 DOMAIN,stream_pilipili.misakaf.org
   #-->兜底
 DOMAIN-KEYWORD,pilipili
 
 # 纸片人
-  #-->前端
+  #-->前端（CDN
 DOMAIN,embyplus.org
-  #-->cloudflare（美国
+  #-->cloudflare（CDN
 DOMAIN,gd.9521732.xyz
-  #-->甲骨文春川
+  #-->甲骨文春川（韩国
 DOMAIN,oracle-chuncheon1.embyplus.org
   #-->racknerd（美国
 DOMAIN,chirsemby.top
@@ -115,9 +115,9 @@ DOMAIN-SUFFIX,embyplus.org
 DOMAIN-SUFFIX,chirsemby.top
 
 # CC
-  #-->前端（新加坡
+  #-->前端（美国
 DOMAIN,cc.coemn.com
-  #-->自动选择（美国
+  #-->自动选择（CDN
 DOMAIN,dl.carryz.net
   #-->兜底
 DOMAIN-SUFFIX,coemn.com
