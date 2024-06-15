@@ -5,8 +5,8 @@ DOMAIN,stream.ntrrr.top
 # GuGu
   #-->美国
 DOMAIN,main.gugumedia.link
-DOMAIN,pro.gugumedia.link
 DOMAIN,main.gugu.media
+DOMAIN,pro.gugumedia.link
 DOMAIN,pro.gugu.media
 DOMAIN,v6.gugu.media
   #-->CDN
@@ -29,13 +29,13 @@ DOMAIN,misty.cx
 DOMAIN,789.123456.al
 
 # 牢大
-  #-->美国V4
+  #-->CDN
 DOMAIN,emby-us-v4.mius.uk
+DOMAIN,emby-fr-v6.mius.uk
 
 # 终点站
   #-->美国
-DOMAIN,pub1.emby.wtf
-DOMAIN,pub2.emby.wtf
+DOMAIN,pub3.emby.wtf
   #-->CDN
 DOMAIN,pub1cf.emby.wtf
 DOMAIN,pub2cf.emby.wtf
@@ -46,11 +46,10 @@ DOMAIN,pub3cf.emby.wtf
 DOMAIN,flare.catlinks.co.uk
   #-->cloudflare（CDN
 DOMAIN,cdsalw2lw.catlinks.co.uk
-  #-->Global（美国
-DOMAIN,wsjqi279-jsbe-wiooe13-wuie.catlinks.co.uk
+  #-->Pro line（没修好，不知道
   #-->Ultra line（美国
 DOMAIN,starcat-gshou.887711.xyz
-  #-->Ultra CDN（CDN
+  #-->Ultra CDN（美国
 DOMAIN,dhs752jdkpq3ns.catlinks.co.uk
   #-->兜底
 DOMAIN-SUFFIX,catlinks.co.uk
@@ -82,8 +81,5 @@ DOMAIN-SUFFIX,chirsemby.top
 # CC
   #-->前端（美国
 DOMAIN,cc.coemn.com
-  #-->自动选择（CDN
-DOMAIN,dl.carryz.net
   #-->兜底
 DOMAIN-SUFFIX,coemn.com
-DOMAIN-SUFFIX,carryz.net
