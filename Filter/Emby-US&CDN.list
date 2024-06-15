@@ -1,0 +1,91 @@
+# ntrrr
+  #-->CDN
+DOMAIN,stream.ntrrr.top
+
+# GuGu
+  #-->美国
+DOMAIN,main.gugumedia.link
+DOMAIN,pro.gugumedia.link
+DOMAIN,main.gugu.media
+DOMAIN,pro.gugu.media
+DOMAIN,v6.gugu.media
+  #-->CDN
+DOMAIN,front.gugumedia.link
+
+# 长东影业
+  #-->美国
+DOMAIN,funmedia.domob.org
+
+# 叔服
+  #-->美国（第一条线路直连，第二条挂梯
+DOMAIN,jz.mcjoker.xyz
+DOMAIN,emby3.mcjoker.xyz
+
+# Misty
+  #-->美国
+DOMAIN,misty.cx
+
+# 树状图
+  #-->CDN
+DOMAIN,789.123456.al
+
+# 牢大
+  #-->美国V4
+DOMAIN,emby-us-v4.mius.uk
+
+# 终点站
+  #-->大妹（美国
+DOMAIN,pub1.emby.wtf
+DOMAIN,pub1cf.emby.wtf
+  #-->二妹
+DOMAIN,pub2cf.emby.wtf
+  #-->三妹（美国
+DOMAIN,pub3.emby.wtf
+DOMAIN,pub3cf.emby.wtf
+
+# 星猫
+  #-->前端（CDN
+DOMAIN,flare.catlinks.co.uk
+  #-->cloudflare（CDN
+DOMAIN,cdsalw2lw.catlinks.co.uk
+  #-->Global（美国
+DOMAIN,wsjqi279-jsbe-wiooe13-wuie.catlinks.co.uk
+  #-->Ultra line（美国
+DOMAIN,starcat-gshou.887711.xyz
+  #-->Ultra CDN（CDN
+DOMAIN,dhs752jdkpq3ns.catlinks.co.uk
+  #-->兜底
+DOMAIN-SUFFIX,catlinks.co.uk
+DOMAIN-SUFFIX,887711.xyz
+
+# PiliPili
+  #-->前端（top是美国，com是CDN
+DOMAIN,emby.pilipiliultra.top
+DOMAIN,emby.pilipiliultra.com
+  #-->CDN
+DOMAIN,stream_pilipili.misakaf.org
+  #-->兜底
+DOMAIN-KEYWORD,pilipili
+
+# 纸片人
+  #-->前端（CDN
+DOMAIN,embyplus.org
+  #-->cloudflare（CDN
+DOMAIN,gd.9521732.xyz
+  #-->racknerd（美国
+DOMAIN,chirsemby.top
+  #-->Hyonix（美国
+DOMAIN,hyonix.embyplus.org
+  #-->兜底
+DOMAIN-SUFFIX,9521732.xyz
+DOMAIN-SUFFIX,embyplus.org
+DOMAIN-SUFFIX,chirsemby.top
+
+# CC
+  #-->前端（美国
+DOMAIN,cc.coemn.com
+  #-->自动选择（CDN
+DOMAIN,dl.carryz.net
+  #-->兜底
+DOMAIN-SUFFIX,coemn.com
+DOMAIN-SUFFIX,carryz.net
