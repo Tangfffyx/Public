@@ -9,8 +9,8 @@ DOMAIN,stream.ntrrr.top
 # GuGu
   #-->美国
 DOMAIN,main.gugumedia.link
-DOMAIN,pro.gugumedia.link
 DOMAIN,main.gugu.media
+DOMAIN,pro.gugumedia.link
 DOMAIN,pro.gugu.media
 DOMAIN,v6.gugu.media
   #-->CDN
@@ -37,9 +37,8 @@ DOMAIN,sss.889393.xyz
 DOMAIN,su.viclub.top
 
 # 叔服
-  #-->中国
+  #-->美国（线路1直连 线路2代理
 DOMAIN,jz.mcjoker.xyz
-  #-->美国
 DOMAIN,emby3.mcjoker.xyz
 
 # Misty
@@ -55,21 +54,20 @@ DOMAIN,789.123456.al
 DOMAIN,v.20120714.xyz
 
 # 牢大
-  #-->美国V4
+  #-->CDN
 DOMAIN,emby-us-v4.mius.uk
-  #-->中国V6
 DOMAIN,emby-fr-v6.mius.uk
 
 # 终点站
   #-->美国
-DOMAIN,pub1.emby.wtf
-DOMAIN,pub2.emby.wtf
+DOMAIN,pub3.emby.wtf
   #-->CDN
 DOMAIN,pub1cf.emby.wtf
 DOMAIN,pub2cf.emby.wtf
 DOMAIN,pub3cf.emby.wtf
   #-->欧洲
-DOMAIN,pub3.emby.wtf
+DOMAIN,pub1.emby.wtf
+DOMAIN,pub2.emby.wtf
 
 #––––––––––––––前后端分离––––––––––––
 
@@ -78,17 +76,20 @@ DOMAIN,pub3.emby.wtf
 DOMAIN,flare.catlinks.co.uk
   #-->cloudflare（CDN
 DOMAIN,cdsalw2lw.catlinks.co.uk
-  #-->Pro line（韩国
-DOMAIN,shuigawd921hfs-ef27893hrsf.catlinks.co.uk
-  #-->Global（美国
-DOMAIN,wsjqi279-jsbe-wiooe13-wuie.catlinks.co.uk
+  #-->Pro line（没修好，不知道
   #-->Ultra line（美国
 DOMAIN,starcat-gshou.887711.xyz
-  #-->Ultra CDN（CDN
+  #-->Ultra CDN（美国
 DOMAIN,dhs752jdkpq3ns.catlinks.co.uk
+  #-->AS9929（欧洲
+DOMAIN,sefsehf3hiu2345ioj235.puddingcat.de
+  #-->Asia（韩国
+DOMAIN,shuigawd921hfs-ef27893hrsf.catlinks.co.uk
+  #-->CN（115.238.185.234分流会自动归为中国
   #-->兜底
 DOMAIN-SUFFIX,catlinks.co.uk
 DOMAIN-SUFFIX,887711.xyz
+DOMAIN-SUFFIX,puddingcat.de
 
 # PiliPili
   #-->前端（top是美国，com是CDN
@@ -118,8 +119,8 @@ DOMAIN-SUFFIX,chirsemby.top
 # CC
   #-->前端（美国
 DOMAIN,cc.coemn.com
-  #-->自动选择（CDN
-DOMAIN,dl.carryz.net
+  #-->自动选择（韩国
+DOMAIN,dx2.carryz.net
   #-->兜底
 DOMAIN-SUFFIX,coemn.com
 DOMAIN-SUFFIX,carryz.net
