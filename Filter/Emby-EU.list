@@ -5,11 +5,6 @@ DOMAIN,netcup-v4.emby.funmedia.10101.io
 DOMAIN,netcup-v6.emby.funmedia.10101.io
 DOMAIN,funmedia.10101.io
 
-# 终点站
-  #-->欧洲
-DOMAIN,pub1.emby.wtf
-DOMAIN,pub2.emby.wtf
-
 # 星猫
   #-->AS9929（欧洲
 DOMAIN,sefsehf3hiu2345ioj235.puddingcat.de
