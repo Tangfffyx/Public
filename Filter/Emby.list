@@ -119,11 +119,10 @@ DOMAIN-SUFFIX,chirsemby.top
 # CC
   #-->前端（美国
 DOMAIN,cc.coemn.com
-  #-->自动选择（韩国
-DOMAIN,dx2.carryz.net
+  #-->自动选择（CDN分发
+DOMAIN-SUFFIX,carryz.net
   #-->兜底
 DOMAIN-SUFFIX,coemn.com
-DOMAIN-SUFFIX,carryz.net
 
 # 桃子
   #-->前端（韩国
