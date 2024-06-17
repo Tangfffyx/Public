@@ -24,54 +24,20 @@ DOMAIN,emby3.mcjoker.xyz
   #-->美国
 DOMAIN,misty.cx
 
-# 树状图
-  #-->CF线路
-DOMAIN,789.123456.al
-
-# 牢大
-  #-->CF线路
-DOMAIN,emby-us-v4.mius.uk
-DOMAIN,emby-fr-v6.mius.uk
-
-# 终点站
-  #-->CF线路
-DOMAIN,pub1cf.emby.wtf
-DOMAIN,pub2cf.emby.wtf
-DOMAIN,pub3cf.emby.wtf
-
 # 星猫
-  #-->前端（CF线路
-DOMAIN,flare.catlinks.co.uk
-  #-->cloudflare（CF线路
-DOMAIN,cdsalw2lw.catlinks.co.uk
-  #-->Pro line（没修好，不知道
   #-->Ultra line（美国
 DOMAIN,starcat-gshou.887711.xyz
-  #-->兜底
-DOMAIN-SUFFIX,catlinks.co.uk
-DOMAIN-SUFFIX,887711.xyz
 
 # PiliPili
-  #-->前端（top是美国，com是CF线路
+  #-->前端（美国
 DOMAIN,emby.pilipiliultra.top
-DOMAIN,emby.pilipiliultra.com
-  #-->CF线路
-DOMAIN,stream_pilipili.misakaf.org
-  #-->兜底
-DOMAIN-KEYWORD,pilipili
 
 # 纸片人
-  #-->前端（CF线路
-DOMAIN,embyplus.org
-  #-->cloudflare（CF线路
-DOMAIN,gd.9521732.xyz
   #-->racknerd（美国
 DOMAIN,chirsemby.top
   #-->Hyonix（美国
 DOMAIN,hyonix.embyplus.org
   #-->兜底
-DOMAIN-SUFFIX,9521732.xyz
-DOMAIN-SUFFIX,embyplus.org
 DOMAIN-SUFFIX,chirsemby.top
 
 # CC
