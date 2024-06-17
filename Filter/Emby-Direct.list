@@ -6,12 +6,6 @@ DOMAIN,sss.889393.xyz
   #-->CDN分发（直连
 DOMAIN,jz.mcjoker.xyz
 
-# 终点站
-  #-->CDN分发
-DOMAIN,pub1.emby.wtf
-DOMAIN,pub2.emby.wtf
-DOMAIN,pub3.emby.wtf
-
 # 星猫
   #-->CN（115.238.185.234分流会自动归为中国
   #-->Ultra CDN（CDN分发
