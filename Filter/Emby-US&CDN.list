@@ -1,5 +1,5 @@
 # ntrrr
-  #-->CDN
+  #-->CF线路
 DOMAIN,stream.ntrrr.top
 
 # GuGu
@@ -9,7 +9,7 @@ DOMAIN,main.gugu.media
 DOMAIN,pro.gugumedia.link
 DOMAIN,pro.gugu.media
 DOMAIN,v6.gugu.media
-  #-->CDN
+  #-->CF线路
 DOMAIN,front.gugumedia.link
 
 # 长东影业
@@ -25,49 +25,51 @@ DOMAIN,emby3.mcjoker.xyz
 DOMAIN,misty.cx
 
 # 树状图
-  #-->CDN
+  #-->CF线路
 DOMAIN,789.123456.al
 
 # 牢大
-  #-->CDN
+  #-->CF线路
 DOMAIN,emby-us-v4.mius.uk
 DOMAIN,emby-fr-v6.mius.uk
 
 # 终点站
-  #-->美国
+  #-->CDN分发
+DOMAIN,pub1.emby.wtf
+DOMAIN,pub2.emby.wtf
 DOMAIN,pub3.emby.wtf
-  #-->CDN
+  #-->CF线路
 DOMAIN,pub1cf.emby.wtf
 DOMAIN,pub2cf.emby.wtf
 DOMAIN,pub3cf.emby.wtf
 
 # 星猫
-  #-->前端（CDN
+  #-->前端（CF线路
 DOMAIN,flare.catlinks.co.uk
-  #-->cloudflare（CDN
+  #-->cloudflare（CF线路
 DOMAIN,cdsalw2lw.catlinks.co.uk
   #-->Pro line（没修好，不知道
   #-->Ultra line（美国
 DOMAIN,starcat-gshou.887711.xyz
-  #-->Ultra CDN（美国
+  #-->Ultra CDN（CDN分发
 DOMAIN,dhs752jdkpq3ns.catlinks.co.uk
   #-->兜底
 DOMAIN-SUFFIX,catlinks.co.uk
 DOMAIN-SUFFIX,887711.xyz
 
 # PiliPili
-  #-->前端（top是美国，com是CDN
+  #-->前端（top是美国，com是CF线路
 DOMAIN,emby.pilipiliultra.top
 DOMAIN,emby.pilipiliultra.com
-  #-->CDN
+  #-->CF线路
 DOMAIN,stream_pilipili.misakaf.org
   #-->兜底
 DOMAIN-KEYWORD,pilipili
 
 # 纸片人
-  #-->前端（CDN
+  #-->前端（CF线路
 DOMAIN,embyplus.org
-  #-->cloudflare（CDN
+  #-->cloudflare（CF线路
 DOMAIN,gd.9521732.xyz
   #-->racknerd（美国
 DOMAIN,chirsemby.top
