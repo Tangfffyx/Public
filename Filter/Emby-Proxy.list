@@ -1,0 +1,114 @@
+# ntrrr
+  #-->CF线路
+DOMAIN,stream.ntrrr.top
+
+# GuGu
+  #-->美国
+DOMAIN,main.gugumedia.link
+DOMAIN,main.gugu.media
+DOMAIN,pro.gugumedia.link
+DOMAIN,pro.gugu.media
+DOMAIN,v6.gugu.media
+  #-->CF线路
+DOMAIN,front.gugumedia.link
+
+# 长东影业
+  #-->德国
+DOMAIN,emby.funmedia.10101.io
+DOMAIN,netcup-v4.emby.funmedia.10101.io
+DOMAIN,netcup-v6.emby.funmedia.10101.io
+DOMAIN,funmedia.10101.io
+  #-->韩国
+DOMAIN,oracle-kr.emby.funmedia.10101.io
+  #-->美国
+DOMAIN,funmedia.domob.org
+
+# 大V
+  #-->韩国
+DOMAIN,su.viclub.top
+
+# 叔服
+  #-->美国
+DOMAIN,emby3.mcjoker.xyz
+
+# Misty
+  #-->美国
+DOMAIN,misty.cx
+
+# 树状图
+  #-->CF线路
+DOMAIN,789.123456.al
+
+# 土拨鼠
+  #-->韩国
+DOMAIN,v.20120714.xyz
+
+# 牢大
+  #-->CF线路
+DOMAIN,emby-us-v4.mius.uk
+DOMAIN,emby-fr-v6.mius.uk
+
+# 终点站
+  #-->CF线路
+DOMAIN,pub1cf.emby.wtf
+DOMAIN,pub2cf.emby.wtf
+DOMAIN,pub3cf.emby.wtf
+
+#––––––––––––––前后端分离––––––––––––
+
+# 星猫
+  #-->前端（CF线路
+DOMAIN,flare.catlinks.co.uk
+  #-->cloudflare（CF线路
+DOMAIN,cdsalw2lw.catlinks.co.uk
+  #-->Pro line（没修好，不知道
+  #-->Ultra line（美国
+DOMAIN,starcat-gshou.887711.xyz
+  #-->AS9929（欧洲
+DOMAIN,sefsehf3hiu2345ioj235.puddingcat.de
+  #-->Asia（韩国
+DOMAIN,shuigawd921hfs-ef27893hrsf.catlinks.co.uk
+  #-->CN（115.238.185.234分流会自动归为中国
+  #-->兜底
+DOMAIN-SUFFIX,catlinks.co.uk
+DOMAIN-SUFFIX,887711.xyz
+DOMAIN-SUFFIX,puddingcat.de
+
+# PiliPili
+  #-->前端（top是美国，com是CF线路
+DOMAIN,emby.pilipiliultra.top
+DOMAIN,emby.pilipiliultra.com
+  #-->CF线路
+DOMAIN,stream_pilipili.misakaf.org
+  #-->兜底
+DOMAIN-KEYWORD,pilipili
+
+# 纸片人
+  #-->前端（CF线路
+DOMAIN,embyplus.org
+  #-->cloudflare（CF线路
+DOMAIN,gd.9521732.xyz
+  #-->甲骨文春川（韩国
+DOMAIN,oracle-chuncheon1.embyplus.org
+  #-->racknerd（美国
+DOMAIN,chirsemby.top
+  #-->Hyonix（美国
+DOMAIN,hyonix.embyplus.org
+  #-->兜底
+DOMAIN-SUFFIX,9521732.xyz
+DOMAIN-SUFFIX,embyplus.org
+DOMAIN-SUFFIX,chirsemby.top
+
+# CC
+  #-->前端（美国
+DOMAIN,cc.coemn.com
+
+# 桃子
+  #-->前端（韩国
+DOMAIN,embymv.tk
+  #-->线路一（韩国
+IP-CIDR, 193.123.232.141/32
+  #-->线路二（日本
+IP-CIDR, 168.138.45.100/32
+  #-->兜底
+DOMAIN-SUFFIX,embymv.tk
