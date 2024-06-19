@@ -14,9 +14,5 @@ DOMAIN,dhs752jdkpq3ns.catlinks.co.uk
   #-->CN（115.238.185.234分流会自动归为中国
 
 # CC
-  #-->前端（美国
-DOMAIN,cc.coemn.com
   #-->自动选择（CDN分发
 DOMAIN-SUFFIX,carryz.net
-  #-->兜底
-DOMAIN-SUFFIX,coemn.com
