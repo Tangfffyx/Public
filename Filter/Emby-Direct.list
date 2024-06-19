@@ -1,58 +1,22 @@
-# TheEnd阿甘服
-  #-->中国
-DOMAIN,sss.889393.xyz
-
 # 叔服
   #-->CDN分发（直连
 DOMAIN,jz.mcjoker.xyz
-
-# 树状图
-  #-->CF线路
-DOMAIN,789.123456.al
-
-# 牢大
-  #-->CF线路
-DOMAIN,emby-us-v4.mius.uk
-DOMAIN,emby-fr-v6.mius.uk
 
 # 终点站
   #-->CDN分发
 DOMAIN,pub1.emby.wtf
 DOMAIN,pub2.emby.wtf
 DOMAIN,pub3.emby.wtf
-  #-->CF线路
-DOMAIN,pub1cf.emby.wtf
-DOMAIN,pub2cf.emby.wtf
-DOMAIN,pub3cf.emby.wtf
 
 # 星猫
-  #-->前端（CF线路
-DOMAIN,flare.catlinks.co.uk
-  #-->cloudflare（CF线路
-DOMAIN,cdsalw2lw.catlinks.co.uk
   #-->Ultra CDN（CDN分发
 DOMAIN,dhs752jdkpq3ns.catlinks.co.uk
-  #-->AS9929（欧洲
-DOMAIN,sefsehf3hiu2345ioj235.puddingcat.de
   #-->CN（115.238.185.234分流会自动归为中国
-  #-->兜底
-DOMAIN-SUFFIX,catlinks.co.uk
-DOMAIN-SUFFIX,887711.xyz
-DOMAIN-SUFFIX,puddingcat.de
 
-# PiliPili
-  #-->前端（CF线路
-DOMAIN,emby.pilipiliultra.com
-  #-->CF线路
-DOMAIN,stream_pilipili.misakaf.org
+# CC
+  #-->前端（美国
+DOMAIN,cc.coemn.com
+  #-->自动选择（CDN分发
+DOMAIN-SUFFIX,carryz.net
   #-->兜底
-DOMAIN-KEYWORD,pilipili
-
-# 纸片人
-  #-->前端（CF线路
-DOMAIN,embyplus.org
-  #-->cloudflare（CF线路
-DOMAIN,gd.9521732.xyz
-  #-->兜底
-DOMAIN-SUFFIX,9521732.xyz
-DOMAIN-SUFFIX,embyplus.org
+DOMAIN-SUFFIX,coemn.com
