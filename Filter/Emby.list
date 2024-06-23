@@ -15,6 +15,8 @@ DOMAIN,pro.gugu.media
 DOMAIN,v6.gugu.media
   #-->CF线路
 DOMAIN,front.gugumedia.link
+  #-–>CDN线路
+DOMAIN,main.gugumedia.site
 
 
 # 长东影业
