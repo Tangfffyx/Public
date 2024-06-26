@@ -12,6 +12,11 @@ DOMAIN,pub1cf.emby.wtf
 DOMAIN,pub2cf.emby.wtf
 DOMAIN,pub3cf.emby.wtf
 
+# 卷毛鼠
+  #-->CF线路（直连效果好
+DOMAIN,cf.jmsooo.com
+DOMAIN,cf2.jmsooo.com
+
 # 星猫
   #-->Ultra CDN（CDN分发
 DOMAIN,dhs752jdkpq3ns.catlinks.co.uk
