@@ -1,5 +1,6 @@
 # vps
-ip-cidr, 192.9.227.0/24, direct
+IP-ASN, 31898, direct
+IP-ASN, 15169, direct 
 
 # 沉浸式翻译
 host-suffix, immersivetranslate.com, direct
