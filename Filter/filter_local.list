@@ -1,3 +1,6 @@
+# vps
+ip-cidr, 192.9.227.0/24, direct
+
 # 沉浸式翻译
 host-suffix, immersivetranslate.com, direct
 
