@@ -13,15 +13,8 @@ DOMAIN,v6.gugu.media
 DOMAIN,front.gugumedia.link
 
 # 长东影业
-  #-->德国
-DOMAIN,emby.funmedia.10101.io
-DOMAIN,netcup-v4.emby.funmedia.10101.io
-DOMAIN,netcup-v6.emby.funmedia.10101.io
-DOMAIN,funmedia.10101.io
-  #-->韩国
-DOMAIN,oracle-kr.emby.funmedia.10101.io
-  #-->美国
-DOMAIN,funmedia.domob.org
+DOMAIN-SUFFIX,10101.io
+DOMAIN-SUFFIX,plex.direct
 
 # 大V
   #-->韩国
