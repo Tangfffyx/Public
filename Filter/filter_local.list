@@ -15,9 +15,6 @@ host, go.synn.cc, direct
 host, stream.synn.cc, SYN SP
 host, stream-zz.synn.cc, SYN SP
 
-# 熊猫
-host, pdatv.cc, 🇺🇸
-
 # talktone
 host-suffix, tktn.be, proxy
 ip-cidr, 69.46.75.86/24, proxy
