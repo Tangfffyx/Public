@@ -2,6 +2,10 @@
   #-->CF线路
 DOMAIN,stream.ntrrr.top
 
+# 熊猫
+  #-–>美国
+DOMAIN-SUFFIX,pdatv.cc
+
 # GuGu
   #-->美国
 DOMAIN,main.gugumedia.link
