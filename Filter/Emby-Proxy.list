@@ -1,9 +1,5 @@
-# ntrrr
-  #-->CF线路
-DOMAIN,stream.ntrrr.top
-
 # 熊猫
-  #-–>美国
+  #-–>德国
 DOMAIN-SUFFIX,pdatv.cc
 
 # GuGu
@@ -19,6 +15,7 @@ DOMAIN,front.gugumedia.link
 # 长东影业
 DOMAIN-SUFFIX,10101.io
 DOMAIN-SUFFIX,plex.direct
+DOMAIN-SUFFIX,syncplay.plex.services
 
 # 大V
   #-->韩国
@@ -46,10 +43,8 @@ DOMAIN,emby-us-v4.mius.uk
 DOMAIN,emby-fr-v6.mius.uk
 
 # 终点站
-  #-->CDN分发（代理效果好
-DOMAIN,pub1.emby.wtf
-DOMAIN,pub2.emby.wtf
-DOMAIN,pub3.emby.wtf
+DOMAIN-SUFFIX,emby.wtf
+DOMAIN-SUFFIX,term.wtf
 
 #––––––––––––––前后端分离––––––––––––
 
