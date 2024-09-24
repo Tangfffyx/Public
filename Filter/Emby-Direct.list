@@ -2,15 +2,18 @@
   #-–>CDN线路
 DOMAIN,main.gugumedia.site
 
+# 东影
+  #-->首尔负载均衡
+DOMAIN,funmedia.sdomo.de
+  #-->首尔1、2
+DOMAIN,oracle-kr.emby.funmedia.10101.io
+DOMAIN,funmedia-kr.domob.org
+  #-->圣何塞
+DOMAIN,funmedia.domob.org
+
 # 叔服
   #-->CDN分发（直连
 DOMAIN,jz.mcjoker.xyz
-
-# 终点站
-  #-->CF线路(直连效果好
-DOMAIN,pub1cf.emby.wtf
-DOMAIN,pub2cf.emby.wtf
-DOMAIN,pub3cf.emby.wtf
 
 # 卷毛鼠
   #-->CF线路（直连效果好
@@ -19,6 +22,7 @@ DOMAIN,cf2.jmsooo.com
 
 # 飞跃地平线
 DOMAIN-SUFFIX,1110111.top
+DOMAIN-SUFFIX,123456.buzz
 
 # 星猫
   #-->Ultra CDN（CDN分发
