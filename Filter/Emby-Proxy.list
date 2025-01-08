@@ -20,16 +20,16 @@ DOMAIN-SUFFIX,catlinks.co.uk
 DOMAIN-SUFFIX,887711.xyz
 DOMAIN-SUFFIX,puddingcat.de
 
+# 终点站
+DOMAIN-SUFFIX,emby.wtf
+DOMAIN-SUFFIX,term.wtf
+
 # SYN
 DOMAIN,clip.synn.cc
 
 # Misty
   #-->美国
 DOMAIN,misty.cx
-
-# 终点站
-DOMAIN-SUFFIX,emby.wtf
-DOMAIN-SUFFIX,term.wtf
 
 # PiliPili
   #-->前端（top是美国，com是CF线路
@@ -39,23 +39,3 @@ DOMAIN,emby.pilipiliultra.com
 DOMAIN,stream_pilipili.misakaf.org
   #-->兜底
 DOMAIN-KEYWORD,pilipili
-
-# 纸片人
-  #-->前端（CF线路
-DOMAIN,embyplus.org
-  #-->cloudflare（CF线路
-DOMAIN,gd.9521732.xyz
-  #-->甲骨文春川（韩国
-DOMAIN,oracle-chuncheon1.embyplus.org
-  #-->racknerd（美国
-DOMAIN,chirsemby.top
-  #-->Hyonix（美国
-DOMAIN,hyonix.embyplus.org
-  #-->兜底
-DOMAIN-SUFFIX,9521732.xyz
-DOMAIN-SUFFIX,embyplus.org
-DOMAIN-SUFFIX,chirsemby.top
-
-# CC
-  #-->前端（美国
-DOMAIN,cc.coemn.com
