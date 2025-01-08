@@ -1,32 +1,25 @@
+# 大V
+  #-->甲骨文首尔
+DOMAIN,su.viclub.top
+
+# 长东影业
+DOMAIN-SUFFIX,10101.io
+DOMAIN-SUFFIX,domob.org
+
+# 叔服
+  #-->美国
+DOMAIN,emby3.mcjoker.xyz
+
+# 桃子
+  #-->线路一 首尔、线路二 CF
+DOMAIN-SUFFIX,embymv.tk
+
 # SYN
 DOMAIN,clip.synn.cc
 
 # 熊猫
   #-–>德国
 DOMAIN-SUFFIX,pdatv.cc
-
-# GuGu
-  #-->美国
-DOMAIN,main.gugumedia.link
-DOMAIN,main.gugu.media
-DOMAIN,pro.gugumedia.link
-DOMAIN,pro.gugu.media
-DOMAIN,v6.gugu.media
-  #-->CF线路
-DOMAIN,front.gugumedia.link
-
-# 长东影业
-DOMAIN-SUFFIX,10101.io
-DOMAIN-SUFFIX,plex.direct
-DOMAIN-SUFFIX,syncplay.plex.services
-
-# 大V
-  #-->韩国
-DOMAIN,su.viclub.top
-
-# 叔服
-  #-->美国
-DOMAIN,emby3.mcjoker.xyz
 
 # Misty
   #-->美国
@@ -97,13 +90,3 @@ DOMAIN-SUFFIX,chirsemby.top
 # CC
   #-->前端（美国
 DOMAIN,cc.coemn.com
-
-# 桃子
-  #-->前端（韩国
-DOMAIN,embymv.tk
-  #-->线路一（韩国
-IP-CIDR, 193.123.232.141/32
-  #-->线路二（日本
-IP-CIDR, 168.138.45.100/32
-  #-->兜底
-DOMAIN-SUFFIX,embymv.tk
