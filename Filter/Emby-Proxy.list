@@ -1,10 +1,19 @@
-# 大V
-  #-->甲骨文首尔
-DOMAIN,su.viclub.top
+# 熊猫
+  #-–>CF
+DOMAIN-SUFFIX,pdatv.cc
 
 # 长东影业
 DOMAIN-SUFFIX,10101.io
 DOMAIN-SUFFIX,domob.org
+
+# 星猫
+DOMAIN-SUFFIX,catlinks.co.uk
+DOMAIN-SUFFIX,887711.xyz
+DOMAIN-SUFFIX,puddingcat.de
+
+# 大V
+  #-->甲骨文首尔
+DOMAIN,su.viclub.top
 
 # 叔服
   #-->美国
@@ -15,27 +24,13 @@ DOMAIN,emby3.mcjoker.xyz
   #-->线路二 CF
 DOMAIN-SUFFIX,embymv.link
 
-# 星猫
-DOMAIN-SUFFIX,catlinks.co.uk
-DOMAIN-SUFFIX,887711.xyz
-DOMAIN-SUFFIX,puddingcat.de
-
 # 终点站
-DOMAIN-SUFFIX,emby.wtf
-DOMAIN-SUFFIX,term.wtf
+#DOMAIN-SUFFIX,emby.wtf
+#DOMAIN-SUFFIX,term.wtf
+
+# Misty
+  #-->CDN
+#DOMAIN,misty.cx
 
 # SYN
 DOMAIN,clip.synn.cc
-
-# Misty
-  #-->美国
-DOMAIN,misty.cx
-
-# PiliPili
-  #-->前端（top是美国，com是CF线路
-DOMAIN,emby.pilipiliultra.top
-DOMAIN,emby.pilipiliultra.com
-  #-->CF线路
-DOMAIN,stream_pilipili.misakaf.org
-  #-->兜底
-DOMAIN-KEYWORD,pilipili
