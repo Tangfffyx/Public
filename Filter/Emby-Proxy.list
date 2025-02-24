@@ -24,9 +24,9 @@ DOMAIN,emby3.mcjoker.xyz
 DOMAIN-SUFFIX,embymv.link
 
 # 终点站
-#DOMAIN-SUFFIX,emby.wtf
-#DOMAIN-SUFFIX,term.wtf
+DOMAIN-SUFFIX,emby.wtf
+DOMAIN-SUFFIX,term.wtf
 
 # Misty
   #-->CDN
-#DOMAIN,misty.cx
+DOMAIN,misty.cx
