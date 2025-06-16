@@ -5,9 +5,9 @@ DOMAIN-SUFFIX,pandtv.de
 # 长东影业
 DOMAIN-KEYWORD,funmedia
 
-# 星翰
-DOMAIN,starharn-global.nebula-media.org
-DOMAIN,starharn-direct.nebula-media.org
-
 # SYN
 DOMAIN-SUFFIX,makima.online
+
+# 琴鸟
+  #-->CDN
+DOMAIN-SUFFIX,lyrebirdemby.com
