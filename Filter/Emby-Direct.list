@@ -1,6 +1,6 @@
 # 熊猫
-  #-->主站和直连
-DOMAIN-SUFFIX,pandtv.de
+  #-->直连
+DOMAIN,d.pandtv.de
 
 # 长东影业
 DOMAIN-KEYWORD,funmedia
