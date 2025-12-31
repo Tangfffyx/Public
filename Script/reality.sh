@@ -126,18 +126,21 @@ add_relay_node() {
     read -p "按回车返回主菜单..." res
 }
 
-# 4. 列出节点
+# 4. 列出节点 (强制获取 IPv4)
 list_nodes() {
     if ! jq -e '.inbounds[]? | select(.tag == "vless-main-in")' "$CONFIG_FILE" > /dev/null; then
         echo -e "${RED}未发现主入站配置！${NC}"; sleep 1; return
     fi
     clear
+    echo -e "${YELLOW}正在获取 IPv4 地址...${NC}"
     local port=$(jq -r '.inbounds[] | select(.tag=="vless-main-in") | .listen_port' "$CONFIG_FILE")
     local sni=$(jq -r '.inbounds[] | select(.tag=="vless-main-in") | .tls.server_name' "$CONFIG_FILE")
     local sid=$(jq -r '.inbounds[] | select(.tag=="vless-main-in") | .tls.reality.short_id[0]' "$CONFIG_FILE")
-    local my_ip=$(curl -s ifconfig.me || echo "服务器IP")
+    
+    # 使用 curl -4 强制请求 IPv4 地址
+    local my_ip=$(curl -s4 ifconfig.me || curl -s4 api.ipify.org || echo "你的IPv4地址")
 
-    echo -e "${GREEN}--- 节点配置列表 ---${NC}"
+    echo -e "${GREEN}--- 节点配置列表 (IPv4) ---${NC}"
     jq -c '.inbounds[] | select(.tag=="vless-main-in") | .users[]' "$CONFIG_FILE" | while read -r user; do
         local name=$(echo $user | jq -r '.name')
         local uuid=$(echo $user | jq -r '.uuid')
