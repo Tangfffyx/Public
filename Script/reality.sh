@@ -8,13 +8,15 @@ YELLOW='\033[0;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-# 初始化环境
+# 初始化环境：增强了对空文件的容错
 init_env() {
     if ! command -v jq &> /dev/null; then
+        echo -e "${YELLOW}检测到未安装 jq，正在安装...${NC}"
         apt-get update && apt-get install -y jq || yum install -y jq
     fi
-    # 只要文件不是合法的 JSON（包括空文件），就初始化一个最基础的结构
-    if [ ! -f "$CONFIG_FILE" ] || ! jq . "$CONFIG_FILE" >/dev/null 2>&1; then
+    # 只要文件不存在、大小为0、或者不是合法JSON，就重写
+    if [ ! -s "$CONFIG_FILE" ] || ! jq . "$CONFIG_FILE" >/dev/null 2>&1; then
+        echo -e "${YELLOW}配置文件为空或格式非法，初始化中...${NC}"
         mkdir -p /etc/sing-box
         echo '{"log":{"level":"info"},"inbounds":[],"outbounds":[{"type":"direct","tag":"direct"}],"route":{"rules":[]}}' > "$CONFIG_FILE"
     fi
@@ -27,8 +29,8 @@ show_menu() {
     echo -e "${GREEN}    GitHub: Tangfffyx                 ${NC}"
     echo -e "${GREEN}======================================${NC}"
     echo " 1. 检查 443 端口占用"
-    echo " 2. 【直连/落地机】配置 443 主入站 (自动生成 UUID)"
-    echo " 3. 【中转机】添加落地节点配置 (手动填写落地 UUID)"
+    echo " 2. 【直连/落地机】配置 443 主入站"
+    echo " 3. 【中转机】添加落地节点配置"
     echo " 4. 列出当前节点配置 (Clash/QX 格式)"
     echo " q. 退出脚本"
     echo -e "${GREEN}--------------------------------------${NC}"
@@ -47,7 +49,7 @@ check_port() {
     read -p "按回车键返回..."
 }
 
-# 2. 基础入站配置
+# 2. 基础入站配置 - 修复了写入逻辑
 add_direct_node() {
     echo -e "${YELLOW}开始配置 443 端口 Reality 主入站...${NC}"
     read -p "请输入 Private_Key: " priv_key
@@ -77,30 +79,37 @@ add_direct_node() {
 
     direct_rule=$(jq -n '{"user": ["direct-user"], "outbound": "direct"}')
 
-    tmp=$(mktemp)
-    jq --argjson in "$new_inbound" --argjson rule "$direct_rule" \
-       'del(.inbounds[]? | select(.tag == "vless-main-in")) | .inbounds += [$in] | 
-        if (.route.rules | map(.user == ["direct-user"]) | any | not) then .route.rules += [$rule] else . end' \
-       "$CONFIG_FILE" > "$tmp" && mv "$tmp" "$CONFIG_FILE"
+    # 使用更加稳健的写入方式
+    # 1. 先确保 inbounds 和 route.rules 存在
+    # 2. 删除旧 tag 并在末尾添加新配置
+    # 3. 避免了管道中断导致的清空
+    content=$(cat "$CONFIG_FILE")
+    updated_json=$(echo "$content" | jq --argjson in "$new_inbound" --argjson rule "$direct_rule" \
+        '(.inbounds | del(.[] | select(.tag == "vless-main-in"))) |= (. + [$in]) |
+         if (.route.rules | map(.user == ["direct-user"]) | any | not) then .route.rules += [$rule] else . end')
 
-    systemctl restart sing-box
-    echo -e "${GREEN}直连节点配置成功！${NC}"
-    echo -e "直连 UUID: ${YELLOW}$uuid${NC}"
+    if [ -n "$updated_json" ]; then
+        echo "$updated_json" > "$CONFIG_FILE"
+        systemctl restart sing-box
+        echo -e "${GREEN}直连节点配置成功！${NC}"
+        echo -e "直连 UUID: ${YELLOW}$uuid${NC}"
+    else
+        echo -e "${RED}JSON 处理出错，配置未写入！${NC}"
+    fi
     read -p "按回车返回主菜单..." res
 }
 
-# 3. 中转节点配置
+# 3. 中转节点配置 - 同步修复逻辑
 add_relay_node() {
     if ! jq -e '.inbounds[]? | select(.tag == "vless-main-in")' "$CONFIG_FILE" > /dev/null; then
         echo -e "${RED}错误：必须先运行选项 2 建立主入站！${NC}"
         sleep 2; return
     fi
 
-    echo -e "${YELLOW}开始添加中转落地配置...${NC}"
     read -p "1. 落地机标识名称: " node_name
     read -p "2. 落地机 IP 地址: " remote_ip
     read -p "3. 落地机 UUID: " remote_uuid
-    read -p "4. 落地机域名 (SNI): " sni
+    read -p "4. 落地机域名: " sni
     read -p "5. 落地机 Public_Key: " pub_key
     read -p "6. 落地机 Short_ID: " sid
     
@@ -113,34 +122,32 @@ add_relay_node() {
         '{"type": "vless", "tag": $tag, "server": $addr, "server_port": 443, "uuid": $uuid, "flow": "xtls-rprx-vision", "tls": {"enabled": true, "server_name": $sni, "utls": {"enabled": true, "fingerprint": "chrome"}, "reality": {"enabled": true, "public_key": $pub, "short_id": $sid}}}')
     new_rule=$(jq -n --arg user "$user_name" --arg out "$out_tag" '{"user": [$user], "outbound": $out}')
 
-    tmp=$(mktemp)
-    jq --argjson user "$new_user" --argjson out "$new_out" --argjson rule "$new_rule" \
-       '(.inbounds[] | select(.tag == "vless-main-in").users) += [$user] | 
-        .outbounds += [$out] | 
-        .route.rules = [$rule] + .route.rules' \
-       "$CONFIG_FILE" > "$tmp" && mv "$tmp" "$CONFIG_FILE"
+    content=$(cat "$CONFIG_FILE")
+    updated_json=$(echo "$content" | jq --argjson user "$new_user" --argjson out "$new_out" --argjson rule "$new_rule" \
+        '(.inbounds[] | select(.tag == "vless-main-in").users) += [$user] | 
+         .outbounds += [$out] | 
+         .route.rules = [$rule] + .route.rules')
 
-    systemctl restart sing-box
-    echo -e "${GREEN}中转节点 [$node_name] 已添加！${NC}"
-    echo -e "手机连接中转机使用的 UUID: ${YELLOW}$relay_client_uuid${NC}"
-    read -p "按回车返回主菜单..." res
+    if [ -n "$updated_json" ]; then
+        echo "$updated_json" > "$CONFIG_FILE"
+        systemctl restart sing-box
+        echo -e "${GREEN}中转节点已添加！UUID: ${YELLOW}$relay_client_uuid${NC}"
+    fi
+    read -p "按回车返回..." res
 }
 
-# 4. 列出节点 (强制获取 IPv4)
+# 4. 列出节点
 list_nodes() {
     if ! jq -e '.inbounds[]? | select(.tag == "vless-main-in")' "$CONFIG_FILE" > /dev/null; then
         echo -e "${RED}未发现主入站配置！${NC}"; sleep 1; return
     fi
     clear
-    echo -e "${YELLOW}正在获取 IPv4 地址...${NC}"
     local port=$(jq -r '.inbounds[] | select(.tag=="vless-main-in") | .listen_port' "$CONFIG_FILE")
     local sni=$(jq -r '.inbounds[] | select(.tag=="vless-main-in") | .tls.server_name' "$CONFIG_FILE")
     local sid=$(jq -r '.inbounds[] | select(.tag=="vless-main-in") | .tls.reality.short_id[0]' "$CONFIG_FILE")
-    
-    # 使用 curl -4 强制请求 IPv4 地址
     local my_ip=$(curl -s4 ifconfig.me || curl -s4 api.ipify.org || echo "你的IPv4地址")
 
-    echo -e "${GREEN}--- 节点配置列表 (IPv4) ---${NC}"
+    echo -e "${GREEN}--- 节点配置列表 ---${NC}"
     jq -c '.inbounds[] | select(.tag=="vless-main-in") | .users[]' "$CONFIG_FILE" | while read -r user; do
         local name=$(echo $user | jq -r '.name')
         local uuid=$(echo $user | jq -r '.uuid')
@@ -153,7 +160,6 @@ list_nodes() {
     read -p "按回车返回..." res
 }
 
-# 执行
 init_env
 while true; do
     show_menu
