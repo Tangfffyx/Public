@@ -1,17 +1,17 @@
 #!/bin/bash
 
+# 变量定义
 CONFIG_FILE="/etc/sing-box/config.json"
-
-# 颜色定义
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[0;33m'
+CYAN='\033[0;36m'
 NC='\033[0m'
 
 # 初始化环境
 init_env() {
     if ! command -v jq &> /dev/null; then
-        echo -e "${YELLOW}正在安装 jq...${NC}"
+        echo -e "${YELLOW}检测到未安装 jq，正在安装...${NC}"
         apt-get update && apt-get install -y jq || yum install -y jq
     fi
     if [ ! -f "$CONFIG_FILE" ]; then
@@ -22,36 +22,38 @@ init_env() {
 
 show_menu() {
     clear
-    echo -e "${GREEN}===============================${NC}"
-    echo -e "${GREEN}   Sing-box Reality 自动化脚本  ${NC}"
-    echo -e "${GREEN}===============================${NC}"
-    echo "1. 检查 443 端口占用"
-    echo "2. 【直连/落地机】配置 443 主入站"
-    echo "3. 【中转机】添加落地节点配置"
-    echo "q. 退出"
-    echo "-------------------------------"
-    read -p "请选择操作: " opt
+    echo -e "${GREEN}======================================${NC}"
+    echo -e "${GREEN}    Sing-box Reality 自动化管理脚本     ${NC}"
+    echo -e "${GREEN}    GitHub: Tangfffyx                 ${NC}"
+    echo -e "${GREEN}======================================${NC}"
+    echo " 1. 检查 443 端口占用"
+    echo " 2. 【直连/落地机】配置 443 主入站 (自动生成 UUID)"
+    echo " 3. 【中转机】添加落地节点配置 (手动填写落地 UUID)"
+    echo " 4. 列出当前节点配置 (Clash/QX 格式)"
+    echo " q. 退出脚本"
+    echo -e "${GREEN}--------------------------------------${NC}"
+    read -p "请输入选项: " opt
 }
 
+# 1. 端口检查
 check_port() {
-    echo -e "${YELLOW}检查 443 端口占用情况...${NC}"
+    echo -e "${YELLOW}正在扫描 443 端口...${NC}"
     if lsof -i:443 > /dev/null; then
-        echo -e "${RED}443 端口已被以下进程占用：${NC}"
+        echo -e "${RED}警告：443 端口已被占用！${NC}"
         lsof -i:443
     else
-        echo -e "${GREEN}恭喜！443 端口没有被占用！${NC}"
+        echo -e "${GREEN}恭喜：443 端口目前空闲。${NC}"
     fi
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回..."
 }
 
-# 选项 2：配置直连/主入站
+# 2. 基础入站配置
 add_direct_node() {
-    echo -e "${YELLOW}--- 配置基础直连入站 ---${NC}"
+    echo -e "${YELLOW}开始配置 443 端口 Reality 主入站...${NC}"
     read -p "请输入 Private_Key: " priv_key
     read -p "请输入 Short_ID: " sid
-    read -p "请输入想偷的域名 (SNI): " sni
+    read -p "请输入偷的域名 (SNI): " sni
     
-    # 只有选项 2 自动生成 UUID
     uuid=$(sing-box generate uuid)
 
     new_inbound=$(jq -n --arg uuid "$uuid" --arg priv "$priv_key" --arg sid "$sid" --arg sni "$sni" \
@@ -82,27 +84,26 @@ add_direct_node() {
        "$CONFIG_FILE" > "$tmp" && mv "$tmp" "$CONFIG_FILE"
 
     systemctl restart sing-box
-    echo -e "${GREEN}配置成功！${NC}"
+    echo -e "${GREEN}直连节点配置成功！${NC}"
     echo -e "直连 UUID: ${YELLOW}$uuid${NC}"
-    read -p "按 0 返回主菜单: " res
+    read -p "按回车返回主菜单..." res
 }
 
-# 选项 3：添加中转
+# 3. 中转节点配置
 add_relay_node() {
     if ! jq -e '.inbounds[]? | select(.tag == "vless-main-in")' "$CONFIG_FILE" > /dev/null; then
-        echo -e "${RED}错误：请先运行选项 2 建立主入站！${NC}"
+        echo -e "${RED}错误：必须先运行选项 2 建立主入站！${NC}"
         sleep 2; return
     fi
 
-    echo -e "${YELLOW}--- 添加中转节点配置 ---${NC}"
-    read -p "1. 落地机名称 (如 us01): " node_name
-    read -p "2. 落地机 IP: " remote_ip
-    read -p "3. 落地机 UUID (手动填写落地机生成的那个): " remote_uuid
+    echo -e "${YELLOW}开始添加中转落地配置...${NC}"
+    read -p "1. 落地机标识名称: " node_name
+    read -p "2. 落地机 IP 地址: " remote_ip
+    read -p "3. 落地机 UUID: " remote_uuid
     read -p "4. 落地机域名 (SNI): " sni
     read -p "5. 落地机 Public_Key: " pub_key
     read -p "6. 落地机 Short_ID: " sid
     
-    # 自动生成给客户端连接中转机用的新 UUID
     relay_client_uuid=$(sing-box generate uuid)
     user_name="relay-$node_name"
     out_tag="out-to-$node_name"
@@ -120,12 +121,36 @@ add_relay_node() {
        "$CONFIG_FILE" > "$tmp" && mv "$tmp" "$CONFIG_FILE"
 
     systemctl restart sing-box
-    echo -e "${GREEN}中转节点 [$node_name] 配置成功！${NC}"
-    echo -e "手机连接中转机应使用的 UUID: ${YELLOW}$relay_client_uuid${NC}"
-    read -p "按 0 返回主菜单: " res
+    echo -e "${GREEN}中转节点 [$node_name] 已添加！${NC}"
+    echo -e "手机连接中转机使用的 UUID: ${YELLOW}$relay_client_uuid${NC}"
+    read -p "按回车返回主菜单..." res
 }
 
-# --- 启动脚本 ---
+# 4. 列出节点
+list_nodes() {
+    if ! jq -e '.inbounds[]? | select(.tag == "vless-main-in")' "$CONFIG_FILE" > /dev/null; then
+        echo -e "${RED}未发现主入站配置！${NC}"; sleep 1; return
+    fi
+    clear
+    local port=$(jq -r '.inbounds[] | select(.tag=="vless-main-in") | .listen_port' "$CONFIG_FILE")
+    local sni=$(jq -r '.inbounds[] | select(.tag=="vless-main-in") | .tls.server_name' "$CONFIG_FILE")
+    local sid=$(jq -r '.inbounds[] | select(.tag=="vless-main-in") | .tls.reality.short_id[0]' "$CONFIG_FILE")
+    local my_ip=$(curl -s ifconfig.me || echo "服务器IP")
+
+    echo -e "${GREEN}--- 节点配置列表 ---${NC}"
+    jq -c '.inbounds[] | select(.tag=="vless-main-in") | .users[]' "$CONFIG_FILE" | while read -r user; do
+        local name=$(echo $user | jq -r '.name')
+        local uuid=$(echo $user | jq -r '.uuid')
+        echo -e "\n${CYAN}用户: $name${NC}"
+        echo -e "${YELLOW}[Clash]${NC}"
+        echo "- {name: $name, type: vless, server: $my_ip, port: $port, uuid: $uuid, network: tcp, udp: true, tls: true, flow: xtls-rprx-vision, servername: $sni, reality-opts: {public-key: 你的公钥, short-id: $sid}, client-fingerprint: chrome}"
+        echo -e "${YELLOW}[QX]${NC}"
+        echo "vless=$my_ip:$port, method=none, password=$uuid, obfs=over-tls, obfs-host=$sni, reality-base64-pubkey=你的公钥, reality-hex-shortid=$sid, vless-flow=xtls-rprx-vision, tag=$name"
+    done
+    read -p "按回车返回..." res
+}
+
+# 执行
 init_env
 while true; do
     show_menu
@@ -133,7 +158,8 @@ while true; do
         1) check_port ;;
         2) add_direct_node ;;
         3) add_relay_node ;;
+        4) list_nodes ;;
         q) exit 0 ;;
-        *) echo "无效选项"; sleep 1 ;;
+        *) echo "无效输入"; sleep 1 ;;
     esac
 done
