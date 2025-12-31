@@ -126,19 +126,28 @@ add_relay_node() {
     read -p "按回车返回..." res
 }
 
-# 4. 列出节点 (智能 Tag)
+# 4. 列出节点 (增强交互：支持动态填入公钥)
 list_nodes() {
     if ! jq -e '.inbounds[]? | select(.tag == "vless-main-in")' "$CONFIG_FILE" > /dev/null; then
         echo -e "${RED}未发现配置，请先执行选项 2！${NC}"; sleep 1; return
     fi
     clear
+
+    # 新增：询问公钥
+    echo -e "${CYAN}提示：为了生成完整的配置，建议输入公钥。${NC}"
+    read -p "请输入 Reality Public_Key (直接回车则显示占位符): " input_pub_key
+    
+    # 设置默认值
+    local pub_key=${input_pub_key:-"你的公钥"}
+    
     local hostname=$(hostname)
     local port=$(jq -r '.inbounds[] | select(.tag=="vless-main-in") | .listen_port' "$CONFIG_FILE")
     local sni=$(jq -r '.inbounds[] | select(.tag=="vless-main-in") | .tls.server_name' "$CONFIG_FILE")
     local sid=$(jq -r '.inbounds[] | select(.tag=="vless-main-in") | .tls.reality.short_id[0]' "$CONFIG_FILE")
     local my_ip=$(curl -s4 ifconfig.me || curl -s4 api.ipify.org || echo "你的IPv4地址")
 
-    echo -e "${GREEN}--- 节点配置列表 ---${NC}"
+    echo -e "\n${GREEN}================ 配置信息 ==================${NC}"
+    
     jq -c '.inbounds[] | select(.tag=="vless-main-in") | .users[]' "$CONFIG_FILE" | while read -r user; do
         local name=$(echo $user | jq -r '.name')
         local uuid=$(echo $user | jq -r '.uuid')
@@ -150,13 +159,16 @@ list_nodes() {
         fi
 
         echo -e "\n${CYAN}节点名称: $display_name${NC}"
-        echo -e "${YELLOW}[Clash Meta]${NC}"
-        echo "- {name: $display_name, type: vless, server: $my_ip, port: $port, uuid: $uuid, network: tcp, udp: true, tls: true, flow: xtls-rprx-vision, servername: $sni, reality-opts: {public-key: 你的公钥, short-id: $sid}, client-fingerprint: chrome}"
+        
+        echo -e "${YELLOW}[Clash Meta / Mihomo]${NC}"
+        echo "- {name: $display_name, type: vless, server: $my_ip, port: $port, uuid: $uuid, network: tcp, udp: true, tls: true, flow: xtls-rprx-vision, servername: $sni, reality-opts: {public-key: $pub_key, short-id: $sid}, client-fingerprint: chrome}"
+        
         echo -e "${YELLOW}[Quantumult X]${NC}"
-        echo "vless=$my_ip:$port, method=none, password=$uuid, obfs=over-tls, obfs-host=$sni, reality-base64-pubkey=你的公钥, reality-hex-shortid=$sid, vless-flow=xtls-rprx-vision, tag=$display_name"
+        echo "vless=$my_ip:$port, method=none, password=$uuid, obfs=over-tls, obfs-host=$sni, reality-base64-pubkey=$pub_key, reality-hex-shortid=$sid, vless-flow=xtls-rprx-vision, tag=$display_name"
     done
-    echo -e "${GREEN}--------------------${NC}"
-    read -p "按回车返回..." res
+    
+    echo -e "${GREEN}============================================${NC}"
+    read -p "按回车返回主菜单..." res
 }
 
 # 5. 删除节点
