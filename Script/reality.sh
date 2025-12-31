@@ -14,7 +14,10 @@ init_env() {
         echo -e "${YELLOW}检测到未安装 jq，正在安装...${NC}"
         apt-get update && apt-get install -y jq || yum install -y jq
     fi
-    if [ ! -f "$CONFIG_FILE" ]; then
+
+    # 核心修复：如果文件不存在 OR 文件内容为空 OR 文件内容不是合法的 JSON
+    if [ ! -s "$CONFIG_FILE" ] || ! jq . "$CONFIG_FILE" >/dev/null 2>&1; then
+        echo -e "${YELLOW}配置文件为空或非法，正在初始化基础结构...${NC}"
         mkdir -p /etc/sing-box
         echo '{"log":{"level":"info"},"inbounds":[],"outbounds":[{"type":"direct","tag":"direct"}],"route":{"rules":[]}}' > "$CONFIG_FILE"
     fi
