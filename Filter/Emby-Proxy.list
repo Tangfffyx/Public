@@ -1,26 +1,23 @@
+# 大V
+DOMAIN-SUFFIX,viclub.top
+
 # 熊猫
-  #-->主站
 DOMAIN-SUFFIX,pandtv.de
 
+# 长东影业
+DOMAIN-KEYWORD,domob
+
 # 桃子
-  #-->线路一 首尔
-  #-->线路二 CF
 DOMAIN-SUFFIX,embymv.link
 
 # 终点站
 DOMAIN-SUFFIX,emby.wtf
-DOMAIN-SUFFIX,term.wtf
 
 # Misty
-  #-->CDN
 DOMAIN,misty.cx
 
 # SYN
-  #-->CDN
 DOMAIN-SUFFIX,synn.cc
-
-# 星翰
-DOMAIN,starharn.nebula-media.org
 
 # CC
 DOMAIN-SUFFIX,coemn.com
