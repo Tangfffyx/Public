@@ -35,31 +35,42 @@ show_menu() {
     read -p "请输入选项: " opt
 }
 
-# 2. 配置主入站
+# 2. 基础入站配置 (仅保留 auth_user)
 add_direct_node() {
-    read -p "Reality Private_Key: " priv_key
-    read -p "Reality Short_ID: " sid
-    read -p "SNI (域名): " sni
+    echo -e "${YELLOW}开始配置 443 端口 Reality 主入站...${NC}"
+    read -p "请输入 Reality Private_Key: " priv_key
+    read -p "请输入 Reality Short_ID: " sid
+    read -p "请输入偷的域名 (SNI): " sni
     uuid=$(sing-box generate uuid)
 
-    # 如果文件不存在或为空，先创建一个基础对象
-    [ ! -f "$CONFIG_FILE" ] || [ ! -s "$CONFIG_FILE" ] && echo '{"log":{"level":"info"},"inbounds":[],"outbounds":[{"type":"direct","tag":"direct"}],"route":{"rules":[]}}' > "$CONFIG_FILE"
+    # 确保基础结构存在
+    [ ! -s "$CONFIG_FILE" ] && echo '{"log":{"level":"info"},"inbounds":[],"outbounds":[{"type":"direct","tag":"direct"}],"route":{"rules":[]}}' > "$CONFIG_FILE"
 
+    # 生成入站配置
     new_inbound=$(jq -n --arg uuid "$uuid" --arg priv "$priv_key" --arg sid "$sid" --arg sni "$sni" \
         '{"type":"vless","tag":"vless-main-in","listen":"::","listen_port":443,"users":[{"name":"direct-user","uuid":$uuid,"flow":"xtls-rprx-vision"}],"tls":{"enabled":true,"server_name":$sni,"reality":{"enabled":true,"handshake":{"server":$sni,"server_port":443},"private_key":$priv,"short_id":[$sid]}}}')
     
+    # 【核心修改】只定义 auth_user 且必须为数组，加上 action: route
     direct_rule=$(jq -n '{"auth_user":["direct-user"],"action":"route","outbound":"direct"}')
 
     content=$(cat "$CONFIG_FILE")
     updated_json=$(echo "$content" | jq --argjson in "$new_inbound" --argjson rule "$direct_rule" '
+        (if type == "object" then . else {} end) |
+        # 更新入站
         .inbounds = ([.inbounds[]? | select(.tag != "vless-main-in")] + [$in]) |
-        .route.rules = ([$rule] + [.route.rules[]? | select(.auth_user != ["direct-user"])]) |
-        .outbounds = (.outbounds // [{"type":"direct","tag":"direct"}])
+        # 【清理关键】删除所有旧的包含 "user" 或 "auth_user" 的直连规则，只添加唯一的数组格式 auth_user 规则
+        .route.rules = ([$rule] + [.route.rules[]? | select(.auth_user != ["direct-user"] and .user != "direct-user" and .user != ["direct-user"])]) |
+        .outbounds = (.outbounds // [{"type":"direct","tag":"direct"}]) |
+        .log = (.log // {"level":"info"})
     ')
 
-    echo "$updated_json" > "$CONFIG_FILE" && systemctl restart sing-box
-    echo -e "${GREEN}主入站已重新配置。UUID: $uuid${NC}"
-    read -p "按回车返回..."
+    if [ -n "$updated_json" ]; then
+        echo "$updated_json" > "$CONFIG_FILE"
+        systemctl restart sing-box
+        echo -e "${GREEN}主入站已成功配置！${NC}"
+        echo -e "生成 UUID: ${YELLOW}$uuid${NC}"
+    fi
+    read -p "按回车返回..." res
 }
 
 # 3. 添加/更新中转
