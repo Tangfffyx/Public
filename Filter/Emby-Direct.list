@@ -1,13 +1,9 @@
 # 熊猫
-  #-->直连
 DOMAIN,d.pandtv.de
+DOMAIN,v.pdtvs.de
 
 # 长东影业
 DOMAIN-KEYWORD,funmedia
 
 # SYN
 DOMAIN-SUFFIX,makima.online
-
-# 琴鸟
-  #-->CDN
-DOMAIN-SUFFIX,lyrebirdemby.com
