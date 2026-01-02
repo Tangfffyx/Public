@@ -116,7 +116,7 @@ add_relay_node() {
     read -p "回车返回..."
 }
 
-# 4. 列出配置 (包含 Clash Meta 和 QX)
+# 4. 列出配置 (包含 Clash Meta 和 QX，修正节点命名逻辑)
 list_nodes() {
     clear
     local has_users=$(jq '.inbounds[]? | select(.tag=="vless-main-in") | .users? // empty' "$CONFIG_FILE")
@@ -148,13 +148,13 @@ list_nodes() {
         local name=$(echo "$user_item" | jq -r '.name')
         local uuid=$(echo "$user_item" | jq -r '.uuid')
         
-        # 确定显示名称
+        # --- 核心命名逻辑修正 ---
         local dname=""
         if [[ "$name" == "direct-user" ]]; then
-            dname="Direct-${hostname}"
+            dname="${hostname}-direct"
         else
-            # 去掉 relay- 前缀，保持显示简洁
-            dname="Relay-${name#relay-}"
+            # 格式：本机名字-relay-sg01
+            dname="${hostname}-${name}"
         fi
 
         echo -e "\n${YELLOW}--------------------------------------${NC}"
@@ -170,7 +170,7 @@ list_nodes() {
 
     done <<< "$users_json"
 
-    # --- 本机 SS (aes-128-gcm) 信息展示 (仅作参考) ---
+    # --- 本机 SS (aes-128-gcm) 信息展示 ---
     local ss_port=$(jq -r '.inbounds[] | select(.tag=="ss-in") | .listen_port // empty' "$CONFIG_FILE")
     if [ -n "$ss_port" ]; then
         local ss_key=$(jq -r '.inbounds[] | select(.tag=="ss-in") | .password' "$CONFIG_FILE")
