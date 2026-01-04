@@ -2,7 +2,7 @@
 
 # ====================================================
 # Project: Sing-box Elite Management System
-# Version: 1.8.6 (Standardized Certificate Naming)
+# Version: 1.9.0 (Restore: TUIC server_name field)
 # ====================================================
 
 CONFIG_FILE="/etc/sing-box/config.json"
@@ -21,7 +21,7 @@ init_env() {
   "log": {"level": "info","timestamp": true},
   "inbounds": [],
   "outbounds": [{"type": "direct","tag": "direct"}],
-  "route": {"rules": [],"final": "direct"}
+  "route": {"rules": []}
 }
 EOF
     fi
@@ -34,7 +34,7 @@ atomic_save() {
     systemctl restart sing-box && echo -e "${G}[成功] 系统服务已重启并应用配置。${NC}"
 }
 
-# --- 1. 核心同步 (修改证书生成名为 server) ---
+# --- 1. 核心同步 ---
 sync_core_services() {
     init_env; local conf=$(cat "$CONFIG_FILE")
     local has_vless=$(echo "$conf" | jq -e '.inbounds[]? | select(.tag == "vless-main-in")' >/dev/null && echo "true" || echo "false")
@@ -67,18 +67,17 @@ sync_core_services() {
     if [ "$has_tuic" == "true" ]; then echo -e " TUIC V5:      ${G}已激活${NC}"; else
         read -p " TUIC 域名 (默认: www.icloud.com): " t_sni_in; t_sni=${t_sni_in:-"www.icloud.com"}
         t_pass=$(openssl rand -base64 12)
-        # 修改点：证书文件名统一改为 server
-        openssl req -x509 -newkey rsa:2048 -nodes -sha256 -keyout /etc/sing-box/server.key -out /etc/sing-box/server.crt -days 3650 -subj "/CN=$t_sni" &> /dev/null
-        # 修改点：配置文件路径指向 server.crt 和 server.key
-        in_t=$(jq -n --arg uuid "$uuid" --arg p "$t_pass" --arg t_sni "$t_sni" '{"type":"tuic","tag":"tuic-in","listen":"::","listen_port":443,"users":[{"name":"tuic-user","uuid":$uuid,"password":$p}],"congestion_control":"bbr","zero_rtt_handshake":false,"tls":{"enabled":true,"server_name":$t_sni,"alpn":["h3"],"certificate_path":"/etc/sing-box/server.crt","key_path":"/etc/sing-box/server.key"}}')
+        openssl req -x509 -newkey ec:<(openssl ecparam -name prime256v1) -keyout /etc/sing-box/tuic.key -out /etc/sing-box/tuic.crt -days 36500 -nodes -subj "/CN=$t_sni" &> /dev/null
+        # 【恢复点】在 tls 对象中重新加入 server_name 字段
+        in_t=$(jq -n --arg uuid "$uuid" --arg p "$t_pass" --arg sni "$t_sni" '{"type":"tuic","tag":"tuic-in","listen":"::","listen_port":443,"users":[{"name":"tuic-user","uuid":$uuid,"password":$p}],"congestion_control":"bbr","tls":{"enabled":true,"server_name":$sni,"alpn":["h3"],"certificate_path":"/etc/sing-box/tuic.crt","key_path":"/etc/sing-box/tuic.key"}}')
         updated_json=$(echo "$updated_json" | jq --argjson t "$in_t" '.inbounds += [$t]')
     fi
 
-    updated_json=$(echo "$updated_json" | jq '.route.rules = [{"auth_user": ["direct-user", "tuic-user"], "action": "route", "outbound": "direct"}] + [ .route.rules[]? | select(.auth_user != null and ( .auth_user | any(startswith("relay-")) )) ]')
+    updated_json=$(echo "$updated_json" | jq '.route.rules = [{"auth_user": ["direct-user", "tuic-user"], "outbound": "direct"}] + [ .route.rules[]? | select(.auth_user != null and ( .auth_user | any(startswith("relay-")) )) ]')
     atomic_save "$updated_json"; read -n 1 -p "按任意键返回..."
 }
 
-# --- 2. 添加/覆盖中转 (保持不变) ---
+# --- 2/3 逻辑保持不变 ---
 add_relay_node() {
     init_env; local conf=$(cat "$CONFIG_FILE")
     echo -e "\n${C}─── 添加/覆盖中转节点 ───${NC}"
@@ -88,7 +87,7 @@ add_relay_node() {
     local user="relay-$n"; local out="out-to-$n"; local uuid=$(sing-box generate uuid)
     new_u=$(jq -n --arg name "$user" --arg uuid "$uuid" '{"name":$name,"uuid":$uuid,"flow":"xtls-rprx-vision"}')
     new_o=$(jq -n --arg tag "$out" --arg addr "$ip" --arg key "$p" '{"type":"shadowsocks","tag":$tag,"server":$addr,"server_port":8080,"method":"aes-128-gcm","password":$key}')
-    new_r=$(jq -n --arg user "$user" --arg out "$out" '{"auth_user":[$user],"action":"route","outbound":$out}')
+    new_r=$(jq -n --arg user "$user" --arg out "$out" '{"auth_user":[$user],"outbound":$out}')
     conf=$(echo "$conf" | jq --arg user "$user" '(.inbounds[] | select(.tag == "vless-main-in").users) |= map(select(.name != $user))')
     conf=$(echo "$conf" | jq --arg out "$out" '.outbounds |= map(select(.tag != $out))')
     conf=$(echo "$conf" | jq --arg user "$user" '.route.rules |= map(select(.auth_user != [$user]))')
@@ -96,7 +95,6 @@ add_relay_node() {
     atomic_save "$updated_json"
 }
 
-# --- 3. 删除中转 (保持不变) ---
 del_relay_node() {
     local conf=$(cat "$CONFIG_FILE")
     mapfile -t nodes < <(echo "$conf" | jq -r '.inbounds[]? | select(.tag == "vless-main-in") | .users[]? | select(.name | startswith("relay-")) | .name' | sed 's/relay-//')
@@ -111,24 +109,31 @@ del_relay_node() {
     fi
 }
 
-# --- 4. 导出配置 (保持不变) ---
+# --- 4. 导出配置 (恢复从 TUIC 节点读取 SNI) ---
 export_configs() {
     clear; local conf=$(cat "$CONFIG_FILE"); local ip=$(curl -s4 ifconfig.me || echo "IP"); local host=$(hostname)
     echo -e "\n${C}─── 节点配置导出 ───${NC}"
     read -p " 请输入 Reality Public Key: " v_pbk; v_pbk=${v_pbk:-"KEY_MISSING"}
+    
     local v_sni=$(echo "$conf" | jq -r '.inbounds[]? | select(.tag=="vless-main-in") | .tls.server_name // "www.icloud.com"')
     local v_sid=$(echo "$conf" | jq -r '.inbounds[]? | select(.tag=="vless-main-in") | .tls.reality.short_id[0] // ""')
     local main_uuid=$(echo "$conf" | jq -r '.inbounds[]? | select(.tag=="vless-main-in") | .users[]? | select(.name=="direct-user") | .uuid // empty')
+    
     if [ -n "$main_uuid" ]; then
         echo -e "\n${W}[VLESS Reality]${NC}"
         echo -e " Clash: - {name: ${host}-Reality, type: vless, server: $ip, port: 443, uuid: $main_uuid, network: tcp, udp: true, tls: true, flow: xtls-rprx-vision, servername: $v_sni, reality-opts: {public-key: $v_pbk, short-id: '$v_sid'}, client-fingerprint: chrome}"
         echo -e " QX:    vless=$ip:443, method=none, password=$main_uuid, obfs=over-tls, obfs-host=$v_sni, reality-base64-pubkey=$v_pbk, reality-hex-shortid=$v_sid, vless-flow=xtls-rprx-vision, tag=${host}-Reality"
     fi
+
     if echo "$conf" | jq -e '.inbounds[]? | select(.tag=="tuic-in")' >/dev/null; then
-        local t_u=$(echo "$conf" | jq -r '.inbounds[] | select(.tag=="tuic-in") | .users[0].uuid'); local t_p=$(echo "$conf" | jq -r '.inbounds[] | select(.tag=="tuic-in") | .users[0].password'); local t_s=$(echo "$conf" | jq -r '.inbounds[] | select(.tag=="tuic-in") | .tls.server_name')
+        local t_u=$(echo "$conf" | jq -r '.inbounds[] | select(.tag=="tuic-in") | .users[0].uuid')
+        local t_p=$(echo "$conf" | jq -r '.inbounds[] | select(.tag=="tuic-in") | .users[0].password')
+        # 【恢复点】直接从 tuic-in 节点读取它自己的 server_name
+        local t_s=$(echo "$conf" | jq -r '.inbounds[] | select(.tag=="tuic-in") | .tls.server_name // "www.icloud.com"')
         echo -e "\n${W}[TUIC V5]${NC}"
         echo -e " Clash: - {name: ${host}-TUIC, type: tuic, server: $ip, port: 443, uuid: $t_u, password: $t_p, alpn: [h3], disable-sni: true, reduce-rtt: false, udp-relay-mode: native, congestion-controller: bbr, skip-cert-verify: true, sni: $t_s}"
     fi
+
     if echo "$conf" | jq -e '.inbounds[]? | select(.tag=="vless-main-in") | .users[]? | select(.name | startswith("relay-"))' >/dev/null; then
         echo -e "\n${W}[Tunnel Relays]${NC}"
         echo "$conf" | jq -c '.inbounds[]? | select(.tag=="vless-main-in") | .users[]? | select(.name | startswith("relay-"))' | while read -r u; do
@@ -144,7 +149,7 @@ export_configs() {
 while true; do
     clear
     echo -e "${B}┌──────────────────────────────────────────────────┐${NC}"
-    echo -e "${B}│          Sing-box Elite 管理系统 V-1.8.6         │${NC}"
+    echo -e "${B}│          Sing-box Elite 管理系统 V-1.9.0         │${NC}"
     echo -e "${B}└──────────────────────────────────────────────────┘${NC}"
     echo -e "  ${C}1.${NC} 核心服务同步 (Reality/SS/TUIC)"
     echo -e "  ${C}2.${NC} 添加或覆盖中转节点"
