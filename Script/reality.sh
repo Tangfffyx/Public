@@ -433,7 +433,19 @@ install_or_update_singbox() {
 clear_config_json() {
   init_manager_env
   clear
-  echo -e "${Y}─── 清空/重置配置文件 ───${NC}"
+  echo -e "${R}─── 危险操作：清空/重置 config.json ───${NC}"
+  echo -e "${Y}该操作将清空当前 sing-box 配置文件！${NC}"
+  echo -e "${Y}仅在你明确知道自己在做什么时继续。${NC}"
+  echo ""
+
+  read -p "请输入 YES 确认清空配置，其它任意输入将取消: " confirm
+  if [ "$confirm" != "YES" ]; then
+    warn "已取消清空配置操作。"
+    pause
+    return
+  fi
+
+  echo -e "${Y}─── 执行清空/重置配置文件 ───${NC}"
 
   local ts backup prev_tmp
   ts="$(date +%Y%m%d_%H%M%S)"
