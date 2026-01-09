@@ -1,20 +1,27 @@
 #!/bin/bash
-
 # ====================================================
-# Project: Sing-box Elite Management System
-# Version: 1.9.3 (Better prompts + "Quantumult X" label)
+# Project: Sing-box Elite Management System + Domo Installer
+# Version: 1.10.2
 #
-# Key behaviors (per your requirements):
-# - VLESS (TCP) + TUIC (UDP) share port 443 OK
-# - Validation: sing-box check -c /etc/sing-box/config.json
-# - Relay SS is FIXED: port 8080 + aes-128-gcm
-# - Export does NOT mask secrets
-# - Routing logic:
-#   * Option 1 ensures direct-user + tuic-user => direct (managed)
-#   * Option 2 manages relay-* => out-to-* (managed)
-#   * If config already has other rules, we do NOT touch them
-#   * If managed rules exist, overwrite; if not, add
-#   * Prevent duplicates via safe de-duplication (objects only)
+# Menu (per your requirements):
+#  1) Install/Update sing-box (APT repo, deps auto-check incl. sudo)
+#  2) Clear config.json (reset to minimal template)
+#  3) View config.json (sing-box format)
+#  4) Core service sync (Reality/SS/TUIC)
+#  5) Add/overwrite relay node
+#  6) Delete relay node
+#  7) Export client configs (Clash / Quantumult X)
+#  8) Uninstall sing-box (keep /etc/sing-box/)
+#
+# Safety rule:
+# - Any time we restart/enable/start sing-box, we ALWAYS run:
+#     sing-box check -c /etc/sing-box/config.json
+#   If check fails: print error and DO NOT restart/start/enable.
+#
+# Notes:
+# - VLESS(TCP) + TUIC(UDP) share 443 OK.
+# - Relay SS is fixed: port 8080 + aes-128-gcm.
+# - Export does NOT mask secrets (per your preference).
 # ====================================================
 
 set -Eeuo pipefail
@@ -22,32 +29,256 @@ set -Eeuo pipefail
 CONFIG_FILE="/etc/sing-box/config.json"
 TEMP_FILE="/etc/sing-box/config.json.tmp"
 
-# 颜色定义
+# ---------- UI ----------
 B='\033[1;34m'; G='\033[1;32m'; R='\033[1;31m'; Y='\033[1;33m'; C='\033[1;36m'; NC='\033[0m'; W='\033[1;37m'
+
+say()  { echo -e "${C}[INFO]${NC} $*"; }
+ok()   { echo -e "${G}[ OK ]${NC} $*"; }
+warn() { echo -e "${Y}[WARN]${NC} $*"; }
+err()  { echo -e "${R}[ERR ]${NC} $*"; }
+
+pause() { read -r -n 1 -p "按任意键返回..." || true; echo ""; }
 
 cleanup() { rm -f "$TEMP_FILE"; }
 trap cleanup EXIT
 
 require_root() {
   if [ "${EUID:-$(id -u)}" -ne 0 ]; then
-    echo -e "${R}[错误] 请使用 root 运行此脚本。${NC}"
+    err "请使用 root 运行此脚本。"
     exit 1
   fi
 }
 
-install_pkg() {
+# ---------- OS / pkg helpers ----------
+has_cmd() { command -v "$1" >/dev/null 2>&1; }
+
+pkg_status() {
+  dpkg-query -W -f='${db:Status-Status}' "$1" 2>/dev/null || true
+}
+
+pkg_installed() {
+  [ "$(pkg_status "$1")" = "installed" ]
+}
+
+apt_update_once() {
+  local stamp="/tmp/.domo_apt_updated"
+  if [ -f "$stamp" ]; then
+    ok "apt-get update 已执行过（本次会话）。"
+    return 0
+  fi
+  say "执行: apt-get update"
+  apt-get update -y
+  touch "$stamp"
+  ok "apt 软件索引更新完成。"
+}
+
+install_pkg_apt() {
   local pkg="$1"
-  if command -v apt-get >/dev/null 2>&1; then
-    apt-get update -y
-    apt-get install -y "$pkg"
-  elif command -v dnf >/dev/null 2>&1; then
-    dnf install -y "$pkg"
-  elif command -v yum >/dev/null 2>&1; then
-    yum install -y "$pkg"
-  else
-    echo -e "${R}[错误] 未找到可用的包管理器(apt/dnf/yum)，请手动安装: $pkg${NC}"
+  if pkg_installed "$pkg"; then
+    ok "依赖已存在: $pkg"
+    return 0
+  fi
+  say "安装依赖: $pkg"
+  apt_update_once
+  apt-get install -y "$pkg"
+  ok "已安装依赖: $pkg"
+}
+
+ensure_deps_for_installer() {
+  require_root
+  if ! has_cmd apt-get; then
+    err "未找到 apt-get。本安装器按 Debian/Ubuntu APT 源方式设计。"
+    err "如果你不是 Debian 系系统，请自行改造为 dnf/yum 或手动安装。"
     exit 1
   fi
+  say "检查并安装必要依赖..."
+  # per your requirement: even if you run as root, still auto-install sudo if missing
+  install_pkg_apt sudo
+  install_pkg_apt ca-certificates
+  install_pkg_apt curl
+  install_pkg_apt gnupg
+  # manager deps
+  install_pkg_apt jq
+  install_pkg_apt openssl
+  ok "依赖检查完成。"
+}
+
+ensure_sagernet_repo() {
+  say "检查/配置 sing-box APT 源..."
+  mkdir -p /etc/apt/keyrings
+  ok "目录已就绪: /etc/apt/keyrings"
+
+  if [ ! -f /etc/apt/keyrings/sagernet.asc ]; then
+    say "下载 GPG key -> /etc/apt/keyrings/sagernet.asc"
+    curl -fsSL https://sing-box.app/gpg.key -o /etc/apt/keyrings/sagernet.asc
+    chmod a+r /etc/apt/keyrings/sagernet.asc
+    ok "GPG key 已配置完成。"
+  else
+    ok "GPG key 已存在，跳过下载。"
+  fi
+
+  if [ ! -f /etc/apt/sources.list.d/sagernet.sources ]; then
+    say "写入 APT 源文件 -> /etc/apt/sources.list.d/sagernet.sources"
+    cat > /etc/apt/sources.list.d/sagernet.sources <<'EOF'
+Types: deb
+URIs: https://deb.sagernet.org/
+Suites: *
+Components: *
+Enabled: yes
+Signed-By: /etc/apt/keyrings/sagernet.asc
+EOF
+    ok "APT 源文件已创建。"
+  else
+    ok "APT 源文件已存在，跳过写入。"
+  fi
+
+  say "执行: apt-get update（添加新源后强制刷新）"
+  apt-get update -y
+  ok "仓库配置完成（已刷新索引）。"
+}
+
+get_candidate_version() {
+  apt-cache policy sing-box | awk '/Candidate:/ {print $2}' | head -n1
+}
+
+get_installed_version() {
+  local st ver
+  st="$(dpkg-query -W -f='${db:Status-Status}' sing-box 2>/dev/null || true)"
+  ver="$(dpkg-query -W -f='${Version}' sing-box 2>/dev/null || true)"
+  if [ "$st" = "installed" ] && [ -n "$ver" ]; then echo "$ver"; else echo ""; fi
+}
+
+show_versions() {
+  local inst cand
+  inst="$(get_installed_version)"
+  cand="$(get_candidate_version)"
+  echo -e "${W}──────── 版本信息 ────────${NC}"
+  echo -e " Installed : ${inst:-<not installed>}"
+  echo -e " Candidate : ${cand:-<none>}"
+  echo -e "${W}──────────────────────────${NC}"
+}
+
+# ---------- sing-box config helpers ----------
+ensure_min_config_exists() {
+  if [ ! -s "$CONFIG_FILE" ] || ! jq -e 'type == "object"' "$CONFIG_FILE" >/dev/null 2>&1; then
+    warn "未发现有效配置，将写入最小模板: $CONFIG_FILE"
+    mkdir -p /etc/sing-box
+    cat > "$CONFIG_FILE" <<'EOF'
+{
+  "log": {"level": "info","timestamp": true},
+  "inbounds": [],
+  "outbounds": [{"type": "direct","tag": "direct"}],
+  "route": {"rules": []}
+}
+EOF
+  fi
+}
+
+check_config_or_print() {
+  if ! has_cmd sing-box; then
+    err "未找到 sing-box 命令。请先用选项1安装。"
+    return 1
+  fi
+  if [ ! -f "$CONFIG_FILE" ]; then
+    err "未找到配置文件：$CONFIG_FILE"
+    return 1
+  fi
+  if sing-box check -c "$CONFIG_FILE" >/dev/null 2>&1; then
+    ok "配置校验通过：sing-box check -c $CONFIG_FILE"
+    return 0
+  fi
+  err "配置校验失败：sing-box check -c $CONFIG_FILE"
+  sing-box check -c "$CONFIG_FILE" 2>&1 | sed 's/^/  /'
+  return 1
+}
+
+restart_singbox_safe() {
+  # Only restart if config passes
+  if ! has_cmd systemctl; then
+    err "未找到 systemctl（可能不是 systemd 系统）。"
+    return 1
+  fi
+  if ! check_config_or_print; then
+    err "已阻止重启：请先修复配置。"
+    return 1
+  fi
+  say "重启服务：systemctl restart sing-box"
+  systemctl restart sing-box
+  ok "sing-box 已重启。"
+}
+
+enable_now_singbox_safe() {
+  if ! has_cmd systemctl; then
+    err "未找到 systemctl（可能不是 systemd 系统）。"
+    return 1
+  fi
+  if ! check_config_or_print; then
+    err "已阻止启动/自启：请先修复配置。"
+    return 1
+  fi
+  say "启用自启并立即启动：systemctl enable --now sing-box"
+  systemctl enable --now sing-box
+  ok "sing-box 已启用自启并启动。"
+}
+
+atomic_save() {
+  local json_data="$1"
+  local ts backup
+  ts="$(date +%Y%m%d_%H%M%S)"
+  backup="/etc/sing-box/config.json.bak.fail.$ts"
+  local prev_tmp="/tmp/singbox_config_prev.$$"
+
+  echo "$json_data" | jq . > "$TEMP_FILE" || {
+    err "JSON 生成/格式化失败，未写入配置。"
+    return 1
+  }
+
+  # Check the temp config using sing-box (more strict than jq)
+  if ! has_cmd sing-box; then
+    err "未找到 sing-box，无法校验配置。请先用选项1安装。"
+    return 1
+  fi
+  if ! sing-box check -c "$TEMP_FILE" >/dev/null 2>&1; then
+    err "sing-box check 校验未通过，未写入配置。"
+    sing-box check -c "$TEMP_FILE" 2>&1 | sed 's/^/  /'
+    return 1
+  fi
+
+  # Save previous config to a temporary file (NOT a persistent backup)
+  if [ -f "$CONFIG_FILE" ]; then
+    cp -a "$CONFIG_FILE" "$prev_tmp"
+  else
+    : > "$prev_tmp"
+  fi
+
+  mv -f "$TEMP_FILE" "$CONFIG_FILE"
+
+  # Restart safely (check again on real path)
+  if restart_singbox_safe; then
+    rm -f "$prev_tmp" 2>/dev/null || true
+    ok "配置已应用（成功重启）。"
+    return 0
+  fi
+
+  err "重启失败或配置校验失败：正在回滚，并在失败时生成备份..."
+  # Persist a backup ONLY on failure
+  if [ -f "$prev_tmp" ] && [ -s "$prev_tmp" ]; then
+    cp -a "$prev_tmp" "$backup"
+    warn "已生成失败备份：$backup"
+    cp -a "$prev_tmp" "$CONFIG_FILE"
+  else
+    # No previous config existed; keep the current file and still record a backup if possible
+    cp -a "$CONFIG_FILE" "$backup" 2>/dev/null || true
+    warn "无旧配置可回滚（首次写入失败）。已保存失败现场：$backup"
+  fi
+  rm -f "$prev_tmp" 2>/dev/null || true
+
+  if restart_singbox_safe; then
+    warn "回滚成功：已恢复到上一版配置并重启。"
+  else
+    err "回滚后仍无法重启，请手动检查：systemctl status sing-box"
+  fi
+  return 1
 }
 
 get_public_ip() {
@@ -59,75 +290,7 @@ get_public_ip() {
   echo "$ip"
 }
 
-init_env() {
-  require_root
-
-  if ! command -v jq >/dev/null 2>&1; then install_pkg jq; fi
-  if ! command -v curl >/dev/null 2>&1; then install_pkg curl; fi
-  if ! command -v openssl >/dev/null 2>&1; then install_pkg openssl; fi
-
-  if ! command -v sing-box >/dev/null 2>&1; then
-    echo -e "${R}[错误] 未找到 sing-box，请先安装后再运行。${NC}"
-    exit 1
-  fi
-  if ! command -v systemctl >/dev/null 2>&1; then
-    echo -e "${R}[错误] 未找到 systemctl（可能不是 systemd 系统），此脚本需要 systemd 管理 sing-box。${NC}"
-    exit 1
-  fi
-
-  if [ ! -s "$CONFIG_FILE" ] || ! jq -e 'type == "object"' "$CONFIG_FILE" >/dev/null 2>&1; then
-    cat > "$CONFIG_FILE" <<EOF
-{
-  "log": {"level": "info","timestamp": true},
-  "inbounds": [],
-  "outbounds": [{"type": "direct","tag": "direct"}],
-  "route": {"rules": []}
-}
-EOF
-  fi
-}
-
-atomic_save() {
-  local json_data="$1"
-  local backup="/etc/sing-box/config.json.bak.$(date +%Y%m%d_%H%M%S)"
-
-  echo "$json_data" | jq . > "$TEMP_FILE" || {
-    echo -e "${R}[失败] JSON 生成/格式化失败，未写入配置。${NC}"
-    return 1
-  }
-
-  if ! sing-box check -c "$TEMP_FILE" >/dev/null 2>&1; then
-    echo -e "${R}[失败] sing-box check 校验未通过，未写入配置。${NC}"
-    sing-box check -c "$TEMP_FILE" 2>&1 | sed 's/^/  /'
-    return 1
-  fi
-
-  if [ -f "$CONFIG_FILE" ]; then
-    cp -a "$CONFIG_FILE" "$backup"
-  fi
-
-  mv -f "$TEMP_FILE" "$CONFIG_FILE"
-
-  if systemctl restart sing-box; then
-    echo -e "${G}[成功] 系统服务已重启并应用配置。${NC}"
-    return 0
-  else
-    echo -e "${R}[失败] sing-box 重启失败，正在回滚到备份配置...${NC}"
-    if [ -f "$backup" ]; then
-      cp -a "$backup" "$CONFIG_FILE"
-      if systemctl restart sing-box; then
-        echo -e "${Y}[回滚成功] 已恢复到上一版配置并重启。${NC}"
-      else
-        echo -e "${R}[回滚失败] 请手动检查：systemctl status sing-box${NC}"
-      fi
-    else
-      echo -e "${R}[回滚失败] 未找到备份文件：$backup${NC}"
-    fi
-    return 1
-  fi
-}
-
-# --- 托管路由规则同步：仅覆盖 direct-user/tuic-user 与 relay-* 对应规则，不动其它，并去重 ---
+# ---------- Route rule management (from 1.9.3) ----------
 sync_managed_route_rules() {
   local json="$1"
 
@@ -182,7 +345,6 @@ sync_managed_route_rules() {
   '
 }
 
-# --- 删除某个 relay 的 route 规则（即使 relay 用户已删，也要把遗留规则删掉），并且对脏 rules 做类型保护 ---
 remove_relay_rule_safely() {
   local json="$1"
   local relay_user="$2"   # e.g. relay-sg01
@@ -201,9 +363,143 @@ remove_relay_rule_safely() {
   '
 }
 
-# --- 1. 核心同步 ---
+# ---------- Manager init ----------
+init_manager_env() {
+  require_root
+  if ! has_cmd jq; then err "未找到 jq，请先用选项1安装/更新（会自动装依赖）。"; exit 1; fi
+  if ! has_cmd curl; then err "未找到 curl，请先用选项1安装/更新（会自动装依赖）。"; exit 1; fi
+  if ! has_cmd openssl; then err "未找到 openssl，请先用选项1安装/更新（会自动装依赖）。"; exit 1; fi
+  if ! has_cmd sing-box; then err "未找到 sing-box，请先用选项1安装。"; exit 1; fi
+  if ! has_cmd systemctl; then err "未找到 systemctl（需要 systemd）。"; exit 1; fi
+
+  ensure_min_config_exists
+}
+
+# ====================================================
+# 1) Install/Update sing-box
+# ====================================================
+install_or_update_singbox() {
+  clear
+  echo -e "${B}┌──────────────────────────────────────────────┐${NC}"
+  echo -e "${B}│        Sing-box Installer / Updater           │${NC}"
+  echo -e "${B}└──────────────────────────────────────────────┘${NC}"
+
+  ensure_deps_for_installer
+  ensure_sagernet_repo
+
+  show_versions
+  local cand inst
+  cand="$(get_candidate_version)"
+  inst="$(get_installed_version)"
+
+  if [ -z "${cand:-}" ] || [ "$cand" = "(none)" ]; then
+    err "未获取到仓库 Candidate 版本。可能是网络/源不可用。"
+    pause
+    return 1
+  fi
+
+  if [ -z "${inst:-}" ]; then
+    say "本机未安装 sing-box，将安装版本: $cand"
+    apt-get install -y sing-box
+    ok "sing-box 安装完成。"
+  else
+    if dpkg --compare-versions "$inst" lt "$cand"; then
+      warn "检测到可更新：$inst  ->  $cand"
+      say "执行升级: apt-get install --only-upgrade sing-box"
+      apt-get install -y --only-upgrade sing-box
+      ok "sing-box 升级完成。"
+    else
+      ok "已是最新版本：$inst（无需更新）"
+    fi
+  fi
+
+  # Ensure config exists; if not, create minimal template but DO NOT force enable unless check passes.
+  ensure_min_config_exists
+
+  # Enable+start safely (checks config first)
+  if has_cmd systemctl; then
+    enable_now_singbox_safe || true
+    say "当前服务状态："
+    systemctl --no-pager -l status sing-box 2>/dev/null || true
+  fi
+
+  show_versions
+  pause
+}
+
+# ====================================================
+# 2) Clear config.json (reset)
+# ====================================================
+clear_config_json() {
+  init_manager_env
+  clear
+  echo -e "${Y}─── 清空/重置配置文件 ───${NC}"
+
+  local ts backup prev_tmp
+  ts="$(date +%Y%m%d_%H%M%S)"
+  backup="/etc/sing-box/config.json.bak.fail.$ts"
+  prev_tmp="/tmp/singbox_config_prev.clear.$$"
+
+  # Save previous config to temp (not a persistent backup)
+  if [ -f "$CONFIG_FILE" ]; then
+    cp -a "$CONFIG_FILE" "$prev_tmp"
+  else
+    : > "$prev_tmp"
+  fi
+
+  cat > "$CONFIG_FILE" <<'EOF'
+{
+  "log": {"level": "info","timestamp": true},
+  "inbounds": [],
+  "outbounds": [{"type": "direct","tag": "direct"}],
+  "route": {"rules": []}
+}
+EOF
+  ok "已写入最小配置模板：$CONFIG_FILE"
+
+  if restart_singbox_safe; then
+    rm -f "$prev_tmp" 2>/dev/null || true
+    ok "清空/重置完成（成功重启）。"
+    pause
+    return 0
+  fi
+
+  err "重启失败：正在回滚，并在失败时生成备份..."
+  if [ -f "$prev_tmp" ] && [ -s "$prev_tmp" ]; then
+    cp -a "$prev_tmp" "$backup"
+    warn "已生成失败备份：$backup"
+    cp -a "$prev_tmp" "$CONFIG_FILE"
+    rm -f "$prev_tmp" 2>/dev/null || true
+    restart_singbox_safe || true
+  else
+    cp -a "$CONFIG_FILE" "$backup" 2>/dev/null || true
+    warn "无旧配置可回滚（首次写入失败）。已保存失败现场：$backup"
+    rm -f "$prev_tmp" 2>/dev/null || true
+  fi
+
+  pause
+}
+
+# ====================================================
+# 3) View config (format)
+# ====================================================
+view_config_formatted() {
+  init_manager_env
+  clear
+  echo -e "${C}─── 查看格式化配置 (sing-box format) ───${NC}"
+  echo ""
+  sing-box format -c "$CONFIG_FILE" || {
+    err "sing-box format 执行失败（可能配置不合法）。"
+  }
+  echo ""
+  pause
+}
+
+# ====================================================
+# 4) Core service sync
+# ====================================================
 sync_core_services() {
-  init_env
+  init_manager_env
   local conf; conf=$(cat "$CONFIG_FILE")
 
   local has_vless has_ss has_tuic
@@ -256,7 +552,6 @@ sync_core_services() {
     updated_json=$(echo "$updated_json" | jq --argjson v "$in_v" '.inbounds += [$v]')
   fi
 
-  # 1.9.3: 在输入前明确提示 SS/TUIC 是否已配置
   if [ "$has_ss" == "true" ]; then
     echo -e " Shadowsocks 模块:   ${G}已配置${NC}"
   else
@@ -308,16 +603,16 @@ sync_core_services() {
     updated_json=$(echo "$updated_json" | jq --argjson t "$in_t" '.inbounds += [$t]')
   fi
 
-  # 托管路由规则：仅维护 direct-user/tuic-user + relay-* 对应规则，其他不动，且去重
   updated_json=$(sync_managed_route_rules "$updated_json")
-
   atomic_save "$updated_json"
-  read -n 1 -p "按任意键返回..."
+  pause
 }
 
-# --- 2. 添加/覆盖中转节点 ---
+# ====================================================
+# 5) Add/overwrite relay node
+# ====================================================
 add_relay_node() {
-  init_env
+  init_manager_env
   local conf; conf=$(cat "$CONFIG_FILE")
 
   echo -e "\n${C}─── 添加/覆盖中转节点 ───${NC}"
@@ -331,7 +626,6 @@ add_relay_node() {
 
   local new_u new_o
   new_u=$(jq -n --arg name "$user" --arg uuid "$uuid" '{"name":$name,"uuid":$uuid,"flow":"xtls-rprx-vision"}')
-  # 固定 8080 + aes-128-gcm（按你的需求写死）
   new_o=$(jq -n --arg tag "$out" --arg addr "$ip" --arg key "$p" '{
     "type":"shadowsocks",
     "tag":$tag,
@@ -341,27 +635,25 @@ add_relay_node() {
     "password":$key
   }')
 
-  # 清理同名 user/outbound（route 由托管函数统一生成，避免重复）
   conf=$(echo "$conf" | jq --arg user "$user" '(.inbounds[] | select(.tag == "vless-main-in").users) |= map(select(.name != $user))')
   conf=$(echo "$conf" | jq --arg out "$out" '.outbounds |= map(select(.tag != $out))')
 
-  # 追加 user + outbound（不在这里手动加 route.rules，避免双重生成导致重复）
   local updated_json
   updated_json=$(echo "$conf" | jq --argjson u "$new_u" --argjson o "$new_o" '
     (.inbounds[] | select(.tag == "vless-main-in").users) += [$u]
     | .outbounds += [$o]
   ')
 
-  # 托管规则同步（会覆盖/补全 relay 路由，且去重，不动其它）
   updated_json=$(sync_managed_route_rules "$updated_json")
-
   atomic_save "$updated_json"
-  read -n 1 -p "按任意键返回..."
+  pause
 }
 
-# --- 3. 删除中转节点 ---
+# ====================================================
+# 6) Delete relay node
+# ====================================================
 del_relay_node() {
-  init_env
+  init_manager_env
   local conf; conf=$(cat "$CONFIG_FILE")
 
   mapfile -t nodes < <(echo "$conf" | jq -r '
@@ -370,8 +662,8 @@ del_relay_node() {
   ' | sed 's/relay-//')
 
   if [ ${#nodes[@]} -eq 0 ]; then
-    echo -e "${Y}暂无已配置的中转节点。${NC}"
-    sleep 1
+    warn "暂无已配置的中转节点。"
+    pause
     return
   fi
 
@@ -392,20 +684,19 @@ del_relay_node() {
       | .outbounds |= map(select(.tag != $o))
     ')
 
-    # 即使 relay 用户已删，也要把遗留的 route 规则删掉（安全处理脏 rules）
     updated_json=$(remove_relay_rule_safely "$updated_json" "$relay_user")
-
-    # 再同步托管规则：删除 relay 后，对应托管规则会自动消失；其他规则不动，并去重
     updated_json=$(sync_managed_route_rules "$updated_json")
-
     atomic_save "$updated_json"
   fi
 
-  read -n 1 -p "按任意键返回..."
+  pause
 }
 
-# --- 4. 导出配置 (从 TUIC 节点读取 SNI) ---
+# ====================================================
+# 7) Export client configs
+# ====================================================
 export_configs() {
+  init_manager_env
   clear
   local conf; conf=$(cat "$CONFIG_FILE")
   local ip; ip=$(get_public_ip)
@@ -414,63 +705,131 @@ export_configs() {
   echo -e "\n${C}─── 节点配置导出 ───${NC}"
   read -p " 请输入 Reality Public Key: " v_pbk; v_pbk=${v_pbk:-"KEY_MISSING"}
 
-  local v_sni v_sid main_uuid
+  # VLESS Reality 公共参数
+  local v_sni v_sid
   v_sni=$(echo "$conf" | jq -r '.inbounds[]? | select(.tag=="vless-main-in") | .tls.server_name // "www.icloud.com"')
   v_sid=$(echo "$conf" | jq -r '.inbounds[]? | select(.tag=="vless-main-in") | .tls.reality.short_id[0] // ""')
-  main_uuid=$(echo "$conf" | jq -r '.inbounds[]? | select(.tag=="vless-main-in") | .users[]? | select(.name=="direct-user") | .uuid // empty')
 
+  # 1) VLESS Reality 直连（direct-user）
+  local main_uuid
+  main_uuid=$(echo "$conf" | jq -r '.inbounds[]? | select(.tag=="vless-main-in") | .users[]? | select(.name=="direct-user") | .uuid // empty')
   if [ -n "$main_uuid" ]; then
-    echo -e "\n${W}[VLESS Reality]${NC}"
-    echo -e " Clash:        - {name: ${host}-Reality, type: vless, server: $ip, port: 443, uuid: $main_uuid, network: tcp, udp: true, tls: true, flow: xtls-rprx-vision, servername: $v_sni, reality-opts: {public-key: $v_pbk, short-id: '$v_sid'}, client-fingerprint: chrome}"
+    echo -e "\n${W}[1] VLESS Reality 直连${NC}"
+    echo -e " Clash:        - {name: ${host}-Reality-Direct, type: vless, server: $ip, port: 443, uuid: $main_uuid, network: tcp, udp: true, tls: true, flow: xtls-rprx-vision, servername: $v_sni, reality-opts: {public-key: $v_pbk, short-id: '$v_sid'}, client-fingerprint: chrome}"
     echo ""
-    echo -e " Quantumult X: vless=$ip:443, method=none, password=$main_uuid, obfs=over-tls, obfs-host=$v_sni, reality-base64-pubkey=$v_pbk, reality-hex-shortid=$v_sid, vless-flow=xtls-rprx-vision, tag=${host}-Reality"
+    echo -e " Quantumult X: vless=$ip:443, method=none, password=$main_uuid, obfs=over-tls, obfs-host=$v_sni, reality-base64-pubkey=$v_pbk, reality-hex-shortid=$v_sid, vless-flow=xtls-rprx-vision, tag=${host}-Reality-Direct"
   fi
 
+  # 2) TUIC V5 直连（tuic-user）
   if echo "$conf" | jq -e '.inbounds[]? | select(.tag=="tuic-in")' >/dev/null 2>&1; then
     local t_u t_p t_s
     t_u=$(echo "$conf" | jq -r '.inbounds[] | select(.tag=="tuic-in") | .users[0].uuid')
     t_p=$(echo "$conf" | jq -r '.inbounds[] | select(.tag=="tuic-in") | .users[0].password')
     t_s=$(echo "$conf" | jq -r '.inbounds[] | select(.tag=="tuic-in") | .tls.server_name // "www.icloud.com"')
 
-    echo -e "\n${W}[TUIC V5]${NC}"
-    echo -e " Clash:        - {name: ${host}-TUIC, type: tuic, server: $ip, port: 443, uuid: $t_u, password: $t_p, alpn: [h3], disable-sni: true, reduce-rtt: false, udp-relay-mode: native, congestion-controller: bbr, skip-cert-verify: true, sni: $t_s}"
+    echo -e "\n${W}[2] TUIC V5 直连${NC}"
+    echo -e " Clash:        - {name: ${host}-TUIC-Direct, type: tuic, server: $ip, port: 443, uuid: $t_u, password: $t_p, alpn: [h3], disable-sni: true, reduce-rtt: false, udp-relay-mode: native, congestion-controller: bbr, skip-cert-verify: true, sni: $t_s}"
   fi
 
-  if echo "$conf" | jq -e '.inbounds[]? | select(.tag=="vless-main-in") | .users[]? | select(.name | startswith("relay-"))' >/dev/null 2>&1; then
-    echo -e "\n${W}[Tunnel Relays]${NC}"
-    echo "$conf" | jq -c '.inbounds[]? | select(.tag=="vless-main-in") | .users[]? | select(.name | startswith("relay-"))' \
-      | while read -r u; do
-        local r_name r_uuid
-        r_name=$(echo "$u" | jq -r '.name' | sed 's/relay-//')
-        r_uuid=$(echo "$u" | jq -r '.uuid')
+  # 3+) 落地节点（relay-*）
+  mapfile -t relay_users < <(echo "$conf" | jq -r '
+    .inbounds[]? | select(.tag=="vless-main-in")
+    | .users[]? | select(.name | startswith("relay-")) | .name
+  ')
 
+  if [ ${#relay_users[@]} -gt 0 ]; then
+    local idx=3
+    for ru in "${relay_users[@]}"; do
+      local r_name r_uuid
+      r_name="${ru#relay-}"
+      r_uuid=$(echo "$conf" | jq -r --arg ru "$ru" '
+        .inbounds[]? | select(.tag=="vless-main-in")
+        | .users[]? | select(.name==$ru) | .uuid
+      ')
+
+      if [ -n "$r_uuid" ]; then
+        echo -e "\n${W}[$idx] 落地 ${r_name}${NC}"
         echo -e " Clash:        - {name: ${host}-to-${r_name}, type: vless, server: $ip, port: 443, uuid: $r_uuid, network: tcp, udp: true, tls: true, flow: xtls-rprx-vision, servername: $v_sni, reality-opts: {public-key: $v_pbk, short-id: '$v_sid'}, client-fingerprint: chrome}"
         echo ""
         echo -e " Quantumult X: vless=$ip:443, method=none, password=$r_uuid, obfs=over-tls, obfs-host=$v_sni, reality-base64-pubkey=$v_pbk, reality-hex-shortid=$v_sid, vless-flow=xtls-rprx-vision, tag=${host}-to-${r_name}"
-      done
+        idx=$((idx+1))
+      fi
+    done
   fi
 
   echo ""
-  read -n 1 -p "按任意键返回主菜单..."
+  pause
 }
 
-while true; do
+# ====================================================
+# 8) Uninstall sing-box (keep /etc/sing-box/)
+# ====================================================
+uninstall_singbox_keep_config() {
+  require_root
   clear
-  echo -e "${B}┌──────────────────────────────────────────────────┐${NC}"
-  echo -e "${B}│          Sing-box Elite 管理系统 V-1.9.3         │${NC}"
-  echo -e "${B}└──────────────────────────────────────────────────┘${NC}"
-  echo -e "  ${C}1.${NC} 核心服务同步 (Reality/SS/TUIC)"
-  echo -e "  ${C}2.${NC} 添加或覆盖中转节点"
-  echo -e "  ${C}3.${NC} 删除现有中转节点"
-  echo -e "  ${C}4.${NC} 导出客户端配置 (Clash/Quantumult X)"
-  echo -e "  ${R}q.${NC} 退出系统"
-  echo -e "${B}────────────────────────────────────────────────────${NC}"
-  read -p " 请选择操作指令: " opt
-  case "${opt:-}" in
-    1) sync_core_services ;;
-    2) add_relay_node ;;
-    3) del_relay_node ;;
-    4) export_configs ;;
-    q) exit 0 ;;
-  esac
-done
+  echo -e "${R}─── 卸载 sing-box（保留 /etc/sing-box/ 配置）───${NC}"
+
+  if ! has_cmd apt-get; then
+    err "未找到 apt-get，本卸载流程按 APT 包管理设计。"
+    pause
+    return 1
+  fi
+
+  if has_cmd systemctl; then
+    say "停止服务（如存在）：systemctl stop sing-box"
+    systemctl stop sing-box >/dev/null 2>&1 || true
+    ok "已尝试停止 sing-box 服务。"
+  fi
+
+  if pkg_installed sing-box || pkg_installed sing-box-beta; then
+    say "执行卸载（remove，不 purge）："
+    pkg_installed sing-box && apt-get remove -y sing-box || true
+    pkg_installed sing-box-beta && apt-get remove -y sing-box-beta || true
+    ok "卸载流程完成（配置保留）。"
+  else
+    warn "未检测到 sing-box/sing-box-beta 已安装，无需卸载。"
+  fi
+
+  if [ -d /etc/sing-box ]; then
+    ok "配置目录仍存在：/etc/sing-box（符合你的要求）"
+  else
+    warn "未找到 /etc/sing-box（可能你之前手动删除过）。"
+  fi
+
+  pause
+}
+
+# ---------- Menu ----------
+main_menu() {
+  while true; do
+    clear
+    echo -e "${B}┌──────────────────────────────────────────────────┐${NC}"
+    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-1.10.2 │${NC}"
+    echo -e "${B}└──────────────────────────────────────────────────┘${NC}"
+    echo -e "  ${C}1.${NC} 安装/更新 sing-box（APT 源，依赖检测+版本对比）"
+    echo -e "  ${C}2.${NC} 清空/重置 config.json（最小模板）"
+    echo -e "  ${C}3.${NC} 查看配置文件（sing-box format）"
+    echo -e "  ${C}4.${NC} 核心服务同步 (Reality/SS/TUIC)"
+    echo -e "  ${C}5.${NC} 添加或覆盖中转节点"
+    echo -e "  ${C}6.${NC} 删除现有中转节点"
+    echo -e "  ${C}7.${NC} 导出客户端配置 (Clash/Quantumult X)"
+    echo -e "  ${C}8.${NC} 卸载 sing-box（保留 /etc/sing-box/ 配置）"
+    echo -e "  ${R}q.${NC} 退出系统"
+    echo -e "${B}────────────────────────────────────────────────────${NC}"
+    read -r -p " 请选择操作指令: " opt
+    case "${opt:-}" in
+      1) install_or_update_singbox ;;
+      2) clear_config_json ;;
+      3) view_config_formatted ;;
+      4) sync_core_services ;;
+      5) add_relay_node ;;
+      6) del_relay_node ;;
+      7) export_configs ;;
+      8) uninstall_singbox_keep_config ;;
+      q|Q) exit 0 ;;
+      *) warn "无效输入：$opt"; sleep 1 ;;
+    esac
+  done
+}
+
+main_menu
