@@ -1,7 +1,7 @@
 #!/bin/bash
 # ====================================================
 # Project: Sing-box Elite Management System + Domo Installer
-# Version: 1.11.1
+# Version: 1.11.6
 #
 # Menu (per your requirements):
 #  1) Install/Update sing-box (APT repo, deps auto-check incl. sudo)
@@ -351,57 +351,50 @@ get_public_ip() {
 
 # ---------- Route rule management (from 1.9.3) ----------
 sync_managed_route_rules() {
-  local json="$1"
+  # Input: JSON string in $1, Output: JSON string to stdout
+  local conf="$1"
 
-  echo "$json" | jq '
-    . as $cfg
-    | def relay_users($c):
-        [ $c.inbounds[]?
-          | select(.tag=="vless-reality-in" or .tag=="vless-main-in")
-          | .users[]?
-          | select(.name | startswith("relay-"))
-          | .name
-        ];
+  # Collect managed "core" users based on existing modules (tolerate legacy names)
+  local users=()
+  if echo "$conf" | jq -e '.inbounds[]? | select(.tag=="vless-reality-in" or .tag=="vless-main-in")' >/dev/null 2>&1; then
+    users+=("vless-reality-user" "direct-user")
+  fi
+  if echo "$conf" | jq -e '.inbounds[]? | select(.tag=="tuic-in")' >/dev/null 2>&1; then
+    users+=("tuic-user")
+  fi
+  if echo "$conf" | jq -e '.inbounds[]? | select(.tag=="vless-ws-in")' >/dev/null 2>&1; then
+    users+=("vless-ws-user")
+  fi
 
-      def desired_rules($rels):
-        (
-          [ {"auth_user":["vless-reality-user","tuic-user","vless-ws-user"],"outbound":"direct"} ]
-          +
-          [ $rels[] | {"auth_user":[.],"outbound":("out-to-" + (sub("^relay-";"")))} ]
-        );
+  # Dedup and drop empties -> JSON array
+  local core_json
+  core_json=$(printf '%s
+' "${users[@]}" | awk 'NF{ if(!seen[$0]++){ print $0 } }' | jq -R . | jq -s .)
 
-      (relay_users($cfg)) as $rels
-      | (
+  # Remove existing "direct + auth_user" rules that overlap with our managed users (prevents duplicates)
+  conf=$(echo "$conf" | jq --argjson core "$core_json" '
+    .route.rules = (
+      [ .route.rules[]? | select(
+          (type=="object") and
           (
-            desired_rules($rels)
-            +
-            (
-              ($cfg.route.rules // [])
-              | map(
-                  if type != "object" then
-                    .
-                  else
-                    if (.auth_user? == ["vless-reality-user","tuic-user","vless-ws-user"]) then
-                      empty
-                    elif ( ((.auth_user?[0] // "") | startswith("relay-"))
-                           and ( ($rels | index((.auth_user?[0] // ""))) != null )
-                           and ((.auth_user? | length) == 1) ) then
-                      empty
-                    else
-                      .
-                    end
-                  end
-                )
-              | map(select(. != null))
+            .outbound != "direct"
+            or (.auth_user? == null)
+            or (
+              ([.auth_user[]?] | map(. as $a | ($core | index($a))) | any(. != null)) | not
             )
-          ) as $all
-          | (
-              ([ $all[] | select(type=="object") ] | unique_by({auth_user, outbound}))
-              + [ $all[] | select(type!="object") ]
-            )
-        ) as $final_rules
-      | .route.rules = $final_rules
-  '
+          )
+      ) ]
+    )
+  ')
+
+  # Prepend a single managed direct rule if core users exist
+  if [ "$(echo "$core_json" | jq 'length')" -gt 0 ]; then
+    conf=$(echo "$conf" | jq --argjson core "$core_json" '
+      .route.rules = ([{"auth_user": $core, "outbound":"direct"}] + (.route.rules // []))
+    ')
+  fi
+
+  echo "$conf"
 }
 
 remove_relay_rule_safely() {
@@ -562,7 +555,33 @@ sync_core_services() {
   maybe_migrate_legacy
   local conf; conf=$(cat "$CONFIG_FILE")
 
-  while true; do
+  # --- Auto-fix: deduplicate managed direct route rule once per run ---
+auto_fix_routes_once() {
+  [ -f "$CONFIG_FILE" ] || return 0
+  has_cmd jq || return 0
+  has_cmd sing-box || return 0
+
+  # Only attempt if current config is valid
+  if ! sing-box check -c "$CONFIG_FILE" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local conf updated old_hash new_hash
+  conf="$(cat "$CONFIG_FILE")"
+  updated="$(sync_managed_route_rules "$conf")" || return 0
+
+  old_hash="$(printf '%s' "$conf" | sha256sum | awk '{print $1}')"
+  new_hash="$(printf '%s' "$updated" | sha256sum | awk '{print $1}')"
+
+  if [ "$old_hash" != "$new_hash" ]; then
+    warn "检测到核心 direct 路由规则可优化（去重/合并），正在自动修复..."
+    atomic_save "$updated" >/dev/null 2>&1 || true
+  fi
+}
+
+auto_fix_routes_once
+
+while true; do
     clear
     echo -e "${B}┌──────────────────────────────────────────────────┐${NC}"
     echo -e "${B}│              核心模块管理 (Install/Uninstall)     │${NC}"
@@ -974,10 +993,17 @@ ${C}─── 添加/覆盖中转节点 ───${NC}"
   conf=$(echo "$conf" | jq --arg user "$user" '(.inbounds[] | select(.tag == "vless-reality-in" or .tag == "vless-main-in").users) |= map(select(.name != $user))')
   conf=$(echo "$conf" | jq --arg out "$out" '.outbounds |= map(select(.tag != $out))')
 
+  # Remove existing relay route rule (if any), then add/overwrite
+  conf="$(remove_relay_rule_safely "$conf" "$user")"
+
+  local new_r
+  new_r=$(jq -n --arg user "$user" --arg out "$out" '{"auth_user":[$user],"outbound":$out}')
+
   local updated_json
-  updated_json=$(echo "$conf" | jq --argjson u "$new_u" --argjson o "$new_o" '
+  updated_json=$(echo "$conf" | jq --argjson u "$new_u" --argjson o "$new_o" --argjson r "$new_r" '
     (.inbounds[] | select(.tag == "vless-reality-in" or .tag == "vless-main-in").users) += [$u]
     | .outbounds += [$o]
+    | .route.rules = ([$r] + (.route.rules // []))
   ')
 
   updated_json=$(sync_managed_route_rules "$updated_json")
@@ -1067,9 +1093,9 @@ export_configs() {
   main_uuid=$(echo "$conf" | jq -r '.inbounds[]? | select(.tag=="vless-reality-in" or .tag=="vless-main-in") | .users[]? | select(.name=="vless-reality-user" or .name=="direct-user") | .uuid // empty')
   if [ -n "$main_uuid" ]; then
     echo -e "\n${W}[$idx] VLESS Reality 直连${NC}"
-    echo -e " Clash:        - {name: ${host}-Reality, type: vless, server: $ip, port: 443, uuid: $main_uuid, network: tcp, udp: true, tls: true, flow: xtls-rprx-vision, servername: $v_sni, reality-opts: {public-key: $v_pbk, short-id: '$v_sid'}, client-fingerprint: chrome}"
+    echo -e " Clash:        - {name: ${host}-reality, type: vless, server: $ip, port: 443, uuid: $main_uuid, network: tcp, udp: true, tls: true, flow: xtls-rprx-vision, servername: $v_sni, reality-opts: {public-key: $v_pbk, short-id: '$v_sid'}, client-fingerprint: chrome}"
     echo ""
-    echo -e " Quantumult X: vless=$ip:443, method=none, password=$main_uuid, obfs=over-tls, obfs-host=$v_sni, reality-base64-pubkey=$v_pbk, reality-hex-shortid=$v_sid, vless-flow=xtls-rprx-vision, tag=${host}-Reality-Direct"
+    echo -e " Quantumult X: vless=$ip:443, method=none, password=$main_uuid, obfs=over-tls, obfs-host=$v_sni, reality-base64-pubkey=$v_pbk, reality-hex-shortid=$v_sid, vless-flow=xtls-rprx-vision, tag=${host}-reality"
     idx=$((idx+1))
   fi
 
@@ -1095,7 +1121,7 @@ export_configs() {
     local w_path_ed="${w_path}?ed=2048"
 
     if [ -n "$w_uuid" ]; then
-      echo -e "\n${W}[$idx] VLESS-WS 直连${NC}"
+      echo -e "\n${W}[$idx] VLESS-WS 直连（仅 Clash）${NC}"
       echo -e " Clash:        - {name: ${host}-vless-ws, type: vless, server: $ip, port: $w_port, uuid: $w_uuid, udp: true, tls: false, network: ws, ws-opts: {path: \"$w_path_ed\"}}"
       idx=$((idx+1))
     fi
@@ -1173,7 +1199,7 @@ main_menu() {
   while true; do
     clear
     echo -e "${B}┌──────────────────────────────────────────────────┐${NC}"
-    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-1.11.1 │${NC}"
+    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-1.11.6 │${NC}"
     echo -e "${B}└──────────────────────────────────────────────────┘${NC}"
     echo -e "  ${C}1.${NC} 安装/更新 sing-box（APT 源，依赖检测+版本对比）"
     echo -e "  ${C}2.${NC} 清空/重置 config.json（最小模板）"
@@ -1182,7 +1208,7 @@ main_menu() {
     echo -e "  ${C}5.${NC} 中转节点管理 (安装/卸载)"
     echo -e "  ${C}6.${NC} 导出客户端配置 (Clash/Quantumult X)"
     echo -e "  ${C}7.${NC} 卸载 sing-box（保留 /etc/sing-box/ 配置）"
-    echo -e "  ${R}q.${NC} 退出系统"
+    echo -e "  ${R}0.${NC} 退出系统"
     echo -e "${B}────────────────────────────────────────────────────${NC}"
     read -r -p " 请选择操作指令: " opt
     case "${opt:-}" in
@@ -1193,12 +1219,10 @@ main_menu() {
       5) manage_relay_nodes ;;
       6) export_configs ;;
       7) uninstall_singbox_keep_config ;;
-      q|Q) exit 0 ;;
+      0|q|Q) exit 0 ;;
       *) warn "无效输入：$opt"; sleep 1 ;;
     esac
   done
 }
-
-main_menu
 
 main_menu
