@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_NAME="Caddy 管理脚本"
-SCRIPT_VERSION="1.0.0"
+SCRIPT_VERSION="1.0.1"
 
 CADDYFILE="/etc/caddy/Caddyfile"
 REPO_LIST="/etc/apt/sources.list.d/caddy-stable.list"
