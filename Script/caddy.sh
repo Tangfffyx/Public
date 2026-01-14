@@ -247,8 +247,6 @@ __DOMAIN__ {
   reverse_proxy {
     to __TARGET__
     header_up X-Real-IP {remote}
-    header_up X-Forwarded-For {remote}
-    header_up X-Forwarded-Proto {scheme}
   }
 }
 
