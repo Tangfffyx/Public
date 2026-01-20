@@ -1,7 +1,7 @@
 #!/bin/bash
 # ====================================================
 # Project: Sing-box Elite Management System + Domo Installer
-# Version: 1.13.0
+# Version: 1.13.1
 #
 # Menu (per your requirements):
 #  1) Install/Update sing-box (APT repo, deps auto-check incl. sudo)
@@ -955,21 +955,62 @@ manage_relay_nodes() {
 add_relay_node() {
   init_manager_env
   local conf; conf=$(cat "$CONFIG_FILE")
-
-  # Prefer new relay inbound: vless-ws-tls-in. Legacy fallback: vless-reality-in (<=1.11.6)
-  local relay_in_tag=""
+  # 选择中转主入站协议（默认：vless-reality）
+  local has_wstls="false"
+  local has_reality="false"
   if echo "$conf" | jq -e '.inbounds[]? | select(.tag == "vless-ws-tls-in")' >/dev/null 2>&1; then
-    relay_in_tag="vless-ws-tls-in"
-  elif echo "$conf" | jq -e '.inbounds[]? | select(.tag == "vless-reality-in" or .tag == "vless-main-in")' >/dev/null 2>&1; then
-    relay_in_tag="vless-reality-in"
-    warn "检测到旧中转逻辑：中转入站仍挂在 vless-reality。建议先在选项4安装 vless-ws-tls，然后再覆盖一次中转节点。"
-  else
-    err "未检测到可用于中转的入站模块（vless-ws-tls-in）。请先在选项4安装 vless-ws-tls。"
-    pause
-    return 1
+    has_wstls="true"
+  fi
+  if echo "$conf" | jq -e '.inbounds[]? | select(.tag == "vless-reality-in" or .tag == "vless-main-in")' >/dev/null 2>&1; then
+    has_reality="true"
   fi
 
   echo -e "\n${C}─── 添加/覆盖中转节点 ───${NC}"
+  echo -e " 主入站协议："
+  echo -e "  ${C}1.${NC} vless-reality（默认）"
+  echo -e "  ${C}2.${NC} vless-ws-tls"
+  read -r -p " 请选择 (1/2，默认 1): " in_choice
+  in_choice=${in_choice:-"1"}
+
+  local relay_in_tag=""
+  case "$in_choice" in
+    1)
+      if [ "$has_reality" != "true" ]; then
+        err "未检测到 vless-reality 入站（vless-reality-in / vless-main-in）。请先在选项4安装 vless-reality。"
+        pause
+        return 1
+      fi
+      if echo "$conf" | jq -e '.inbounds[]? | select(.tag == "vless-reality-in")' >/dev/null 2>&1; then
+        relay_in_tag="vless-reality-in"
+      else
+        relay_in_tag="vless-main-in"
+      fi
+      ;;
+    2)
+      if [ "$has_wstls" != "true" ]; then
+        err "未检测到 vless-ws-tls 入站（vless-ws-tls-in）。请先在选项4安装 vless-ws-tls。"
+        pause
+        return 1
+      fi
+      relay_in_tag="vless-ws-tls-in"
+      ;;
+    *)
+      warn "无效选择，已默认使用 vless-reality。"
+      if [ "$has_reality" != "true" ]; then
+        err "未检测到 vless-reality 入站（vless-reality-in / vless-main-in）。请先在选项4安装 vless-reality。"
+        pause
+        return 1
+      fi
+      if echo "$conf" | jq -e '.inbounds[]? | select(.tag == "vless-reality-in")' >/dev/null 2>&1; then
+        relay_in_tag="vless-reality-in"
+      else
+        relay_in_tag="vless-main-in"
+      fi
+      ;;
+  esac
+
+  echo -e "
+${C}─── 添加/覆盖中转节点 ───${NC}"
   read -r -p " 落地标识 (如 sg01): " n; [ -z "$n" ] && return
   read -r -p " 落地 IP 地址: " ip; [ -z "$ip" ] && return
   read -r -p " 落地 SS 密码: " p; [ -z "$p" ] && return
@@ -977,6 +1018,15 @@ add_relay_node() {
   local user="relay-$n"
   local out="out-to-$n"
   local uuid; uuid=$(sing-box generate uuid)
+
+
+  # 若同名中转已存在，将从旧主入站迁移到本次选择的主入站
+  local old_tags=""
+  old_tags=$(echo "$conf" | jq -r --arg user "$user" '.inbounds[]? | select((.users? // []) | any(.name == $user)) | .tag' 2>/dev/null | tr '
+' ' ' | sed 's/[[:space:]]\+/ /g' | sed 's/^ //; s/ $//')
+  if [ -n "$old_tags" ] && ! echo " $old_tags " | grep -q " $relay_in_tag "; then
+    warn "检测到 ${user} 已存在于 [$old_tags]，将迁移到 [$relay_in_tag]。"
+  fi
 
   local new_u new_o
   new_u=$(jq -n --arg name "$user" --arg uuid "$uuid" '{"name":$name,"uuid":$uuid}')
@@ -1069,13 +1119,18 @@ export_configs() {
   local host; host=$(hostname)
 
   echo -e "\n${C}─── 节点配置导出 ───${NC}"
+  # 按需提示：仅当模块存在时才要求输入；不输入则使用占位符
+  local v_pbk="PUBLIC_KEY_MISSING"
+  if echo "$conf" | jq -e '.inbounds[]? | select(.tag=="vless-reality-in" or .tag=="vless-main-in")' >/dev/null 2>&1; then
+    read -r -p " 请输入 Reality Public Key (默认: PUBLIC_KEY_MISSING): " v_pbk_in
+    v_pbk=${v_pbk_in:-"PUBLIC_KEY_MISSING"}
+  fi
 
-  # reality public key: placeholder only (no prompt)
-  local v_pbk="PUBLIC_KEY_HERE"
-
-  # vless-ws-tls domain prompt (SNI/Host)
-  read -r -p " 请输入 vless-ws-tls 域名 (SNI/Host，默认: example.com): " wstls_domain_in
-  local wstls_domain=${wstls_domain_in:-"example.com"}
+  local wstls_domain="example.com"
+  if echo "$conf" | jq -e '.inbounds[]? | select(.tag=="vless-ws-tls-in")' >/dev/null 2>&1; then
+    read -r -p " 请输入 vless-ws-tls 域名 (SNI/Host，默认: example.com): " wstls_domain_in
+    wstls_domain=${wstls_domain_in:-"example.com"}
+  fi
   local wstls_port=443
 
   # 1) vless-ws-tls direct
@@ -1197,7 +1252,7 @@ main_menu() {
   while true; do
     clear
     echo -e "${B}┌──────────────────────────────────────────────────┐${NC}"
-    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-1.13.0 │${NC}"
+    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-1.13.1 │${NC}"
     echo -e "${B}└──────────────────────────────────────────────────┘${NC}"
     echo -e "  ${C}1.${NC} 安装/更新 sing-box（APT 源，依赖检测+版本对比）"
     echo -e "  ${C}2.${NC} 清空/重置 config.json（最小模板）"
