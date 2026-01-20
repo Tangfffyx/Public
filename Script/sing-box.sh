@@ -1,7 +1,7 @@
 #!/bin/bash
 # ====================================================
 # Project: Sing-box Elite Management System + Domo Installer
-# Version: 1.13.1
+# Version: 1.13.3
 #
 # Menu (per your requirements):
 #  1) Install/Update sing-box (APT repo, deps auto-check incl. sudo)
@@ -1029,7 +1029,11 @@ ${C}─── 添加/覆盖中转节点 ───${NC}"
   fi
 
   local new_u new_o
-  new_u=$(jq -n --arg name "$user" --arg uuid "$uuid" '{"name":$name,"uuid":$uuid}')
+  if [ "$relay_in_tag" = "vless-reality-in" ] || [ "$relay_in_tag" = "vless-main-in" ]; then
+    new_u=$(jq -n --arg name "$user" --arg uuid "$uuid" '{"name":$name,"uuid":$uuid,"flow":"xtls-rprx-vision"}')
+  else
+    new_u=$(jq -n --arg name "$user" --arg uuid "$uuid" '{"name":$name,"uuid":$uuid}')
+  fi
   new_o=$(jq -n --arg tag "$out" --arg addr "$ip" --arg key "$p" '{"type":"shadowsocks","tag":$tag,"server":$addr,"server_port":8080,"method":"aes-128-gcm","password":$key,"multiplex":{"enabled":true}}')
 
   # Remove same relay user from both new/legacy relay inbounds (avoid duplicates)
@@ -1194,14 +1198,29 @@ export_configs() {
     fi
 
     echo "$conf" | jq -c '(.inbounds[]? | (.users? // []))[]? | select((.name? // "") | startswith("relay-"))' | while read -r u; do
-      local r_name r_uuid
-      r_name=$(echo "$u" | jq -r '.name' | sed 's/relay-//')
+      local r_full r_name r_uuid
+      r_full=$(echo "$u" | jq -r '.name')
+      r_name=$(echo "$r_full" | sed 's/relay-//')
       r_uuid=$(echo "$u" | jq -r '.uuid')
 
-      echo -e "\n${W}[落地 ${r_name}]${NC}"
-      echo -e " Clash: - {name: ${host}-to-${r_name}, type: vless, server: $ip, port: ${wstls_port}, uuid: ${r_uuid}, udp: true, tls: true, network: ws, servername: ${wstls_domain}, ws-opts: {path: \"${wstls_path}\", headers: {Host: ${wstls_domain}}, max-early-data: 2048, early-data-header-name: Sec-WebSocket-Protocol}}"
-      echo ""
-      echo -e " Quantumult X: vless=${wstls_domain}:${wstls_port}, method=none, password=${r_uuid}, obfs=wss, obfs-uri=${wstls_path}?ed=2048, fast-open=false, udp-relay=true, tag=${host}-to-${r_name}"
+      # 判断该落地用户当前挂载在哪个主入站（用于导出对应协议）
+      local in_reality="false"
+      if echo "$conf" | jq -e --arg user "$r_full" '.inbounds[]? | select(.tag=="vless-reality-in" or .tag=="vless-main-in") | (.users? // [])[]? | select(.name==$user)' >/dev/null 2>&1; then
+        in_reality="true"
+      fi
+
+      echo -e "
+${W}[落地 ${r_name}]${NC}"
+
+      if [ "$in_reality" = "true" ]; then
+        echo -e " Clash: - {name: ${host}-to-${r_name}, type: vless, server: $ip, port: ${v_port}, uuid: $r_uuid, network: tcp, udp: true, tls: true, flow: xtls-rprx-vision, servername: $v_sni, reality-opts: {public-key: $v_pbk, short-id: '$v_sid'}, client-fingerprint: chrome}"
+    echo ""
+      echo -e " Quantumult X: vless=$ip:${v_port}, method=none, password=$r_uuid, obfs=over-tls, obfs-host=$v_sni, reality-base64-pubkey=$v_pbk, reality-hex-shortid=$v_sid, vless-flow=xtls-rprx-vision, tag=${host}-to-${r_name}"
+      else
+        echo -e " Clash: - {name: ${host}-to-${r_name}, type: vless, server: $ip, port: ${wstls_port}, uuid: $r_uuid, udp: true, tls: true, network: ws, servername: ${wstls_domain}, ws-opts: {path: \"${wstls_path}\", headers: {Host: ${wstls_domain}}, max-early-data: 2048, early-data-header-name: Sec-WebSocket-Protocol}}"
+        echo ""
+        echo -e " Quantumult X: vless=${wstls_domain}:${wstls_port}, method=none, password=$r_uuid, obfs=wss, obfs-uri=${wstls_path}?ed=2048, fast-open=false, udp-relay=true, tag=${host}-to-${r_name}"
+      fi
     done
   fi
 
@@ -1252,7 +1271,7 @@ main_menu() {
   while true; do
     clear
     echo -e "${B}┌──────────────────────────────────────────────────┐${NC}"
-    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-1.13.1 │${NC}"
+    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-1.13.3 │${NC}"
     echo -e "${B}└──────────────────────────────────────────────────┘${NC}"
     echo -e "  ${C}1.${NC} 安装/更新 sing-box（APT 源，依赖检测+版本对比）"
     echo -e "  ${C}2.${NC} 清空/重置 config.json（最小模板）"
