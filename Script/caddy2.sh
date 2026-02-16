@@ -312,15 +312,15 @@ option_add_proxy() {
   # 根据模式提问
   if [[ "$mode" == "2" ]]; then
     # VLESS 模式：必须问路径，有默认值
-    read -r -p "请输入路径 (默认 /ray): " path
+    read -r -p "请输入路径 (默认 /Akaman): " path
     path="${path// /}"
-    path="${path:-/ray}"
+    path="${path:-/Akaman}"
     if [[ ! "$path" =~ ^/ ]]; then path="/$path"; fi
     
-    # 目标默认 127.0.0.1:10000
-    read -r -p "请输入目标 (默认 127.0.0.1:10000): " target
+    # 目标默认 127.0.0.1:8001
+    read -r -p "请输入目标 (默认 127.0.0.1:8001): " target
     target="${target// /}"
-    target="${target:-127.0.0.1:10000}"
+    target="${target:-127.0.0.1:8001}"
     
     # 修正 target 格式
     if [[ "$target" =~ ^[0-9]+$ ]]; then target="127.0.0.1:$target"; fi
