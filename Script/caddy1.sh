@@ -160,7 +160,8 @@ inject_proxy_config() {
     pre=(p=="")?("reverse_proxy "t):("reverse_proxy "p" "t)
     if(m=="1"){ print "  "pre }
     else if(m=="2"){ print "  "pre" {"; print "    header_up X-Real-IP {remote}"; print "  }" }
-    else if(m=="3"){ print "  "pre" {"; print "    header_up Host {upstream_hostport}"; print "  }" }
+    else if(m=="3"){ print "  "pre" {"; print "    header_up Host {upstream_hostport}"; print "    header_up X-Real-IP {remote}"; print "  }" }
+    else if(m=="4"){ print "  "pre" {"; print "    header_up Host {host}"; print "    header_up X-Real-IP {remote}"; print "  }" }
   }
 
   {
@@ -252,6 +253,12 @@ append_proxy_line() {
   elif [[ "$m" == "3" ]]; then
     echo "$pre {" >> "${CADDYFILE}"
     echo "    header_up Host {upstream_hostport}" >> "${CADDYFILE}"
+    echo "    header_up X-Real-IP {remote}" >> "${CADDYFILE}"
+    echo "  }" >> "${CADDYFILE}"
+  elif [[ "$m" == "4" ]]; then
+    echo "$pre {" >> "${CADDYFILE}"
+    echo "    header_up Host {host}" >> "${CADDYFILE}"
+    echo "    header_up X-Real-IP {remote}" >> "${CADDYFILE}"
     echo "  }" >> "${CADDYFILE}"
   fi
 }
@@ -305,17 +312,17 @@ option_add_proxy() {
     path="${path:-/Akaman}"
     if [[ ! "$path" =~ ^/ ]]; then path="/$path"; fi
     
-    # 端口默认 8001
-    read -r -p "请输入目标 (默认 8001): " target
+    # 目标默认 127.0.0.1:8001
+    read -r -p "请输入目标 (默认 127.0.0.1:8001): " target
     target="${target// /}"
     target="${target:-127.0.0.1:8001}"
     
     # 修正 target 格式
     if [[ "$target" =~ ^[0-9]+$ ]]; then target="127.0.0.1:$target"; fi
     
-    # 映射到内部模式 ID (1=标准, 2=RealIP, 3=Host)
-    # VLESS 本质上是标准反代，只是带路径。所以模式传 1
-    mode_internal="1"
+    # 映射到内部模式 ID
+    # 4 = VLESS WS (Host + X-Real-IP)
+    mode_internal="4"
     
   else
     # 其他模式：路径默认为空
