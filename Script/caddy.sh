@@ -2,10 +2,10 @@
 set -euo pipefail
 
 # ==========================================
-# Caddy 管理脚本 (v5.0.0 GitHub发布版)
+# Caddy 管理脚本 (v6.0.0 GitHub发布版)
 # ==========================================
 SCRIPT_NAME="Caddy 管理脚本"
-SCRIPT_VERSION="5.0.0"
+SCRIPT_VERSION="6.0.0"
 
 CADDYFILE="/etc/caddy/Caddyfile"
 REPO_LIST="/etc/apt/sources.list.d/caddy-stable.list"
@@ -159,14 +159,8 @@ inject_proxy_config() {
     # 生成反代规则
     pre=(p=="")?("reverse_proxy "t):("reverse_proxy "p" "t)
     if(m=="1"){ print "  "pre }
-    else if(m=="2"){ print "  "pre" {"; print "    header_up X-Real-IP {remote_host}"; print "  }" }
-    else if(m=="3"){
-      print "  "pre" {"
-      print "    header_up Host {upstream_host}"
-      print "    header_up X-Real-IP {remote_host}"
-      print "  }"
-    }
-    else if(m=="4"){ print "  "pre" {"; print "    header_up Host {host}"; print "    header_up X-Real-IP {remote_host}"; print "  }" }
+    else if(m=="2"){ print "  "pre" {"; print "    header_up X-Real-IP {remote}"; print "  }" }
+    else if(m=="3"){ print "  "pre" {"; print "    header_up Host {upstream_hostport}"; print "  }" }
   }
 
   {
@@ -253,17 +247,11 @@ append_proxy_line() {
     echo "$pre" >> "${CADDYFILE}"
   elif [[ "$m" == "2" ]]; then
     echo "$pre {" >> "${CADDYFILE}"
-    echo "    header_up X-Real-IP {remote_host}" >> "${CADDYFILE}"
+    echo "    header_up X-Real-IP {remote}" >> "${CADDYFILE}"
     echo "  }" >> "${CADDYFILE}"
   elif [[ "$m" == "3" ]]; then
     echo "$pre {" >> "${CADDYFILE}"
-    echo "    header_up Host {upstream_host}" >> "${CADDYFILE}"
-    echo "    header_up X-Real-IP {remote_host}" >> "${CADDYFILE}"
-    echo "  }" >> "${CADDYFILE}"
-  elif [[ "$m" == "4" ]]; then
-    echo "$pre {" >> "${CADDYFILE}"
-    echo "    header_up Host {host}" >> "${CADDYFILE}"
-    echo "    header_up X-Real-IP {remote_host}" >> "${CADDYFILE}"
+    echo "    header_up Host {upstream_hostport}" >> "${CADDYFILE}"
     echo "  }" >> "${CADDYFILE}"
   fi
 }
@@ -294,8 +282,8 @@ option_add_proxy() {
   echo ">>> 请选择反代模式："
   echo "1. 标准反代 (Web/静态站)"
   echo "2. 反代 VLESS (WebSocket 节点, 需路径)"
-  echo "3. 反代他人服务 (伪装/外站/Emby）"
-  echo "4. 传递真实IP (GitHub加速等)"
+  echo "3. 反代他人服务 (伪装/外站)"
+  echo "4. 传递真实IP (Emby/GitHub加速 等)"
   
   local mode
   read -r -p "请输入编号 [1]: " mode
@@ -317,16 +305,17 @@ option_add_proxy() {
     path="${path:-/Akaman}"
     if [[ ! "$path" =~ ^/ ]]; then path="/$path"; fi
     
-    # 目标默认 127.0.0.1:8001
-    read -r -p "请输入目标 (默认 127.0.0.1:8001): " target
+    # 端口默认 8001
+    read -r -p "请输入目标 (默认 8001): " target
     target="${target// /}"
     target="${target:-127.0.0.1:8001}"
     
     # 修正 target 格式
     if [[ "$target" =~ ^[0-9]+$ ]]; then target="127.0.0.1:$target"; fi
     
-    # 映射到内部模式 ID (1=标准, 2=RealIP, 3=Host(upstream), 4=VLESS WS(Host+RealIP))
-    mode_internal="4"
+    # 映射到内部模式 ID (1=标准, 2=RealIP, 3=Host)
+    # VLESS 本质上是标准反代，只是带路径。所以模式传 1
+    mode_internal="1"
     
   else
     # 其他模式：路径默认为空
