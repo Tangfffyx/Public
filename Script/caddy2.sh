@@ -159,8 +159,14 @@ inject_proxy_config() {
     # 生成反代规则
     pre=(p=="")?("reverse_proxy "t):("reverse_proxy "p" "t)
     if(m=="1"){ print "  "pre }
-    else if(m=="2"){ print "  "pre" {"; print "    header_up X-Real-IP {remote}"; print "  }" }
-    else if(m=="3"){ print "  "pre" {"; print "    header_up Host {upstream_hostport}"; print "  }" }
+    else if(m=="2"){ print "  "pre" {"; print "    header_up X-Real-IP {remote_host}"; print "  }" }
+    else if(m=="3"){
+      print "  "pre" {"
+      print "    header_up Host {upstream_host}"
+      print "    header_up X-Real-IP {remote_host}"
+      print "  }"
+    }
+    else if(m=="4"){ print "  "pre" {"; print "    header_up Host {host}"; print "    header_up X-Real-IP {remote_host}"; print "  }" }
   }
 
   {
@@ -247,11 +253,17 @@ append_proxy_line() {
     echo "$pre" >> "${CADDYFILE}"
   elif [[ "$m" == "2" ]]; then
     echo "$pre {" >> "${CADDYFILE}"
-    echo "    header_up X-Real-IP {remote}" >> "${CADDYFILE}"
+    echo "    header_up X-Real-IP {remote_host}" >> "${CADDYFILE}"
     echo "  }" >> "${CADDYFILE}"
   elif [[ "$m" == "3" ]]; then
     echo "$pre {" >> "${CADDYFILE}"
-    echo "    header_up Host {upstream_hostport}" >> "${CADDYFILE}"
+    echo "    header_up Host {upstream_host}" >> "${CADDYFILE}"
+    echo "    header_up X-Real-IP {remote_host}" >> "${CADDYFILE}"
+    echo "  }" >> "${CADDYFILE}"
+  elif [[ "$m" == "4" ]]; then
+    echo "$pre {" >> "${CADDYFILE}"
+    echo "    header_up Host {host}" >> "${CADDYFILE}"
+    echo "    header_up X-Real-IP {remote_host}" >> "${CADDYFILE}"
     echo "  }" >> "${CADDYFILE}"
   fi
 }
@@ -282,8 +294,8 @@ option_add_proxy() {
   echo ">>> 请选择反代模式："
   echo "1. 标准反代 (Web/静态站)"
   echo "2. 反代 VLESS (WebSocket 节点, 需路径)"
-  echo "3. 反代他人服务 (伪装/外站)"
-  echo "4. 传递真实IP (Emby/GitHub加速 等)"
+  echo "3. 反代他人服务 (伪装/外站/Emby）"
+  echo "4. 传递真实IP (GitHub加速等)"
   
   local mode
   read -r -p "请输入编号 [1]: " mode
@@ -300,22 +312,21 @@ option_add_proxy() {
   # 根据模式提问
   if [[ "$mode" == "2" ]]; then
     # VLESS 模式：必须问路径，有默认值
-    read -r -p "请输入路径 (默认 /Akaman): " path
+    read -r -p "请输入路径 (默认 /ray): " path
     path="${path// /}"
-    path="${path:-/Akaman}"
+    path="${path:-/ray}"
     if [[ ! "$path" =~ ^/ ]]; then path="/$path"; fi
     
-    # 端口默认 8001
-    read -r -p "请输入目标 (默认 8001): " target
+    # 目标默认 127.0.0.1:10000
+    read -r -p "请输入目标 (默认 127.0.0.1:10000): " target
     target="${target// /}"
-    target="${target:-127.0.0.1:8001}"
+    target="${target:-127.0.0.1:10000}"
     
     # 修正 target 格式
     if [[ "$target" =~ ^[0-9]+$ ]]; then target="127.0.0.1:$target"; fi
     
-    # 映射到内部模式 ID (1=标准, 2=RealIP, 3=Host)
-    # VLESS 本质上是标准反代，只是带路径。所以模式传 1
-    mode_internal="1"
+    # 映射到内部模式 ID (1=标准, 2=RealIP, 3=Host(upstream), 4=VLESS WS(Host+RealIP))
+    mode_internal="4"
     
   else
     # 其他模式：路径默认为空
