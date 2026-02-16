@@ -282,8 +282,8 @@ option_add_proxy() {
   echo ">>> 请选择反代模式："
   echo "1. 标准反代 (Web/静态站)"
   echo "2. 反代 VLESS (WebSocket 节点, 需路径)"
-  echo "3. 反代他人服务 (伪装/外站)"
-  echo "4. 传递真实IP (Emby/GitHub加速 等)"
+  echo "3. 反代他人服务 (伪装/外站/Emby)"
+  echo "4. 传递真实IP (GitHub加速等)"
   
   local mode
   read -r -p "请输入编号 [1]: " mode
