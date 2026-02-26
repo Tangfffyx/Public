@@ -315,6 +315,7 @@ atomic_save() {
   # Restart safely (check again on real path)
   if restart_singbox_safe; then
     rm -f "$prev_tmp" 2>/dev/null || true
+    systemctl enable sing-box >/dev/null 2>&1 || true
     ok "配置已应用（成功重启）。"
     return 0
   fi
