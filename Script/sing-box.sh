@@ -1160,6 +1160,8 @@ export_configs() {
 
     echo -e "\n${W}[VLESS-WS 直连]${NC}"
     echo -e " Clash: - {name: ${host}-vless-ws, type: vless, server: $ip, port: ${ws_port}, uuid: ${ws_uuid}, udp: true, tls: false, network: ws, ws-opts: {path: \"${ws_path}?ed=2048\"}}"
+    echo ""
+    echo -e " Quantumult X: vless=$ip:443,method=none,password=${ws_uuid},obfs=wss,obfs-host=example.com,obfs-uri=${wstls_path}?ed=2048,fast-open=false,udp-relay=true,tag=${host}-vless-wss"
   fi
 
   # 3) TUIC direct
@@ -1272,7 +1274,7 @@ main_menu() {
   while true; do
     clear
     echo -e "${B}┌──────────────────────────────────────────────────┐${NC}"
-    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-1.13.3 │${NC}"
+    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-2.0 │${NC}"
     echo -e "${B}└──────────────────────────────────────────────────┘${NC}"
     echo -e "  ${C}1.${NC} 安装/更新 sing-box（APT 源，依赖检测+版本对比）"
     echo -e "  ${C}2.${NC} 清空/重置 config.json（最小模板）"
