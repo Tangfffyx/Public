@@ -1274,7 +1274,7 @@ main_menu() {
   while true; do
     clear
     echo -e "${B}┌──────────────────────────────────────────────────┐${NC}"
-    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-2.0 │${NC}"
+    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-2.0    │${NC}"
     echo -e "${B}└──────────────────────────────────────────────────┘${NC}"
     echo -e "  ${C}1.${NC} 安装/更新 sing-box（APT 源，依赖检测+版本对比）"
     echo -e "  ${C}2.${NC} 清空/重置 config.json（最小模板）"
