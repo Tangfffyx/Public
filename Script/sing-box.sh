@@ -1147,7 +1147,7 @@ export_configs() {
     echo -e "\n${W}[VLESS-WS-TLS 直连]${NC}"
     echo -e " Clash: - {name: ${host}-vless-wss, type: vless, server: $ip, port: ${wstls_port}, uuid: ${wstls_uuid}, udp: true, tls: true, network: ws, servername: ${wstls_domain}, ws-opts: {path: \"${wstls_path}\", headers: {Host: ${wstls_domain}}, max-early-data: 2048, early-data-header-name: Sec-WebSocket-Protocol}}"
     echo ""
-    echo -e " Quantumult X: vless=${wstls_domain}:${wstls_port}, method=none, password=${wstls_uuid}, obfs=wss, obfs-uri=${wstls_path}?ed=2048, fast-open=false, udp-relay=true, tag=${host}-vless-wss"
+    echo -e " Quantumult X: vless=$ip:${wstls_port},method=none,password=${wstls_uuid},obfs=wss,obfs-host=${wstls_domain},obfs-uri=${wstls_path}?ed=2048,fast-open=false,udp-relay=true,tag=${host}-vless-wss"
   fi
 
   # 2) vless-ws direct (Clash only)
