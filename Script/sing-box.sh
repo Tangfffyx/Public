@@ -1,7 +1,7 @@
 #!/bin/bash
 # ====================================================
 # Project: Sing-box Elite Management System + Domo Installer
-# Version: 1.13.3
+# Version: 1.13.6
 #
 # Menu (per your requirements):
 #  1) Install/Update sing-box (APT repo, deps auto-check incl. sudo)
@@ -358,6 +358,18 @@ sync_managed_route_rules() {
 
   local users=()
 
+  # Collect ALL Shadowsocks users (any inbound tag startswith "ss-in").
+  # Keep routing explicit & future-proof (avoid implicit defaults).
+  local ss_users=()
+  mapfile -t ss_users < <(
+    echo "$conf" \
+      | jq -r '.inbounds[]? | select((.tag // "") | startswith("ss-in")) | .users[]?.name // empty' \
+      | sort -u
+  )
+  if [ ${#ss_users[@]} -gt 0 ]; then
+    users+=("${ss_users[@]}")
+  fi
+
   if echo "$conf" | jq -e '.inbounds[]? | select(.tag=="vless-ws-tls-in")' >/dev/null 2>&1; then
     users+=("vless-ws-tls-user")
   fi
@@ -580,7 +592,7 @@ sync_core_services() {
     local has_wstls has_ws has_ss has_tuic has_vless
     has_wstls=$(echo "$conf" | jq -e '.inbounds[]? | select(.tag == "vless-ws-tls-in")' >/dev/null 2>&1 && echo "true" || echo "false")
     has_ws=$(echo "$conf" | jq -e '.inbounds[]? | select(.tag == "vless-ws-in")' >/dev/null 2>&1 && echo "true" || echo "false")
-    has_ss=$(echo "$conf" | jq -e '.inbounds[]? | select(.tag == "ss-in")' >/dev/null 2>&1 && echo "true" || echo "false")
+    has_ss=$(echo "$conf" | jq -e '.inbounds[]? | select((.tag // "") | startswith("ss-in"))' >/dev/null 2>&1 && echo "true" || echo "false")
     has_tuic=$(echo "$conf" | jq -e '.inbounds[]? | select(.tag == "tuic-in")' >/dev/null 2>&1 && echo "true" || echo "false")
     has_vless=$(echo "$conf" | jq -e '.inbounds[]? | select(.tag == "vless-reality-in" or .tag == "vless-main-in")' >/dev/null 2>&1 && echo "true" || echo "false")
 
@@ -682,15 +694,63 @@ sync_core_services() {
             ;;
           3)
             if [ "$has_ss" = "true" ]; then
-              echo -e " shadowsocks 模块: ${G}已安装${NC}"
-              continue
+              echo -e " shadowsocks 模块: ${G}已安装${NC}（可继续添加/覆盖 user）"
+            else
+              echo -e " shadowsocks 模块: ${Y}未安装，开始安装...${NC}"
             fi
-            echo -e " shadowsocks 模块: ${Y}未安装，开始安装...${NC}"
-            read -r -p " Shadowsocks 密码: " ss_p
-            [ -z "${ss_p:-}" ] && { warn "未输入密码，跳过 shadowsocks 安装。"; continue; }
-            local in_s
-            in_s=$(jq -n --arg p "$ss_p" '{"type":"shadowsocks","tag":"ss-in","listen":"::","listen_port":8080,"method":"aes-128-gcm","password":$p,"multiplex":{"enabled":true}}')
-            updated_json=$(echo "$updated_json" | jq --argjson s "$in_s" '.inbounds += [$s]')
+
+            read -r -p " Shadowsocks 监听端口 (默认: 8080): " ss_port_in
+            local ss_port=${ss_port_in:-"8080"}
+
+            read -r -p " Shadowsocks 标识 (如 core/hk/jp): " ss_id
+            [ -z "${ss_id:-}" ] && { warn "未输入标识，跳过 shadowsocks 安装。"; continue; }
+
+            read -r -p " Shadowsocks 密码（按回车设置随机密码）: " ss_p
+            if [ -z "${ss_p:-}" ]; then
+              ss_p=$(openssl rand -base64 16)
+              ok "已生成随机密码。"
+            fi
+
+            local new_ss_user
+            new_ss_user=$(jq -n --arg name "$ss_id" --arg p "$ss_p" '{"name":$name,"password":$p}')
+
+            # 规则：同端口不同标识 => 同一个端口的 user 放在同一个 ss-in-PORT（或兼容旧 ss-in）里；不同端口则是不同 ss 节点
+            local ss_tag="ss-in-${ss_port}"
+            updated_json=$(echo "$updated_json" | jq --argjson u "$new_ss_user" --arg port "$ss_port" --arg tag "$ss_tag" '
+              def norm_users:
+                (if .users? then .users
+                 elif .password? then [{"name":"default","password":.password}]
+                 else [] end);
+
+              # 兼容旧 ss-in：如果旧 ss-in 的 listen_port 正好等于本次端口，则继续复用旧 tag=ss-in
+              ((.inbounds // []) | map(select(.tag=="ss-in" and ((.listen_port|tostring) == $port))) | length) as $legacy_match
+              | (if (.inbounds | any(.tag==$tag)) then $tag
+                 elif ($legacy_match > 0) then "ss-in"
+                 else $tag end) as $t
+              | if (.inbounds | any(.tag==$t)) then
+                  .inbounds |= map(
+                    if .tag==$t then
+                      .listen = "::"
+                      | .listen_port = ($port|tonumber)
+                      | .method = "aes-128-gcm"
+                      | (if .multiplex? then .multiplex.enabled=true else .multiplex={"enabled":true} end)
+                      | (norm_users) as $users
+                      | .users = ($users | map(select(.name != $u.name)) + [$u])
+                      | del(.password)
+                    else . end
+                  )
+                else
+                  .inbounds += [{
+                    "type":"shadowsocks",
+                    "tag":$t,
+                    "listen":"::",
+                    "listen_port":($port|tonumber),
+                    "method":"aes-128-gcm",
+                    "users":[ $u ],
+                    "multiplex":{"enabled":true}
+                  }]
+                end
+            ')
             ;;
           4)
             if [ "$has_tuic" = "true" ]; then
@@ -796,7 +856,36 @@ sync_core_services() {
             [ "$has_ws" = "true" ] && { say "卸载 vless-ws..."; updated_json=$(echo "$updated_json" | jq '.inbounds |= map(select(.tag != "vless-ws-in"))'); }
             ;;
           3)
-            [ "$has_ss" = "true" ] && { say "卸载 shadowsocks..."; updated_json=$(echo "$updated_json" | jq '.inbounds |= map(select(.tag != "ss-in"))'); }
+            if [ "$has_ss" = "true" ]; then
+              say "卸载 shadowsocks..."
+
+              # 支持按端口卸载：当存在多个 ss-in* 入站时，可只移除某一个端口对应的入站。
+              # 兼容旧逻辑：直接回车/输入 all => 卸载全部 ss-in*。
+              local ss_list
+              ss_list=$(echo "$updated_json" | jq -r '.inbounds[]? | select((.tag // "") | startswith("ss-in")) | "\(.listen_port // 0)\t\(.tag // "")"' | sort -u)
+
+              if [ -n "${ss_list:-}" ]; then
+                echo -e "\n${Y}当前 Shadowsocks 入站（端口\tTag）:${NC}"
+                echo "$ss_list" | sed 's/^/  - /'
+              fi
+
+              read -r -p " 请输入要卸载的 Shadowsocks 端口（回车/all=全部）: " ss_rm_port
+
+              if [ -z "${ss_rm_port:-}" ] || [ "${ss_rm_port:-}" = "all" ]; then
+                updated_json=$(echo "$updated_json" | jq '.inbounds |= map(select(((.tag // "") | startswith("ss-in")) | not))')
+              else
+                # 仅移除 listen_port 匹配的 ss-in* 入站
+                updated_json=$(echo "$updated_json" | jq --arg p "$ss_rm_port" '
+                  .inbounds |= map(
+                    if (((.tag // "") | startswith("ss-in")) and ((.listen_port // 0 | tostring) == $p)) then
+                      empty
+                    else
+                      .
+                    end
+                  )
+                ')
+              fi
+            fi
             ;;
           4)
             [ "$has_tuic" = "true" ] && { say "卸载 tuic-v5..."; updated_json=$(echo "$updated_json" | jq '.inbounds |= map(select(.tag != "tuic-in"))'); }
@@ -1193,7 +1282,38 @@ export_configs() {
     echo -e " Quantumult X: vless=$ip:$v_port, method=none, password=$main_uuid, obfs=over-tls, obfs-host=$v_sni, reality-base64-pubkey=$v_pbk, reality-hex-shortid=$v_sid, vless-flow=xtls-rprx-vision, tag=${host}-reality"
   fi
 
-  # Relays: robustly discover relay-* users from ANY inbound users[]
+  # 5) Shadowsocks direct (ss-in / ss-in-PORT) - export per inbound+user
+if echo "$conf" | jq -e '.inbounds[]? | select((.tag // "") | startswith("ss-in"))' >/dev/null 2>&1; then
+  echo -e "\n${W}[Shadowsocks 直连]${NC}"
+
+  # 遍历所有 ss-in* 入站（不同端口视为不同 ss 节点）
+  echo "$conf" | jq -c '
+    .inbounds[]?
+    | select((.tag // "") | startswith("ss-in"))
+    | {tag:(.tag // "ss-in"), port:(.listen_port // 0), users:(if .users? then .users elif .password? then [{"name":"default","password":.password}] else [] end)}
+  ' | while read -r inbound; do
+    local ss_tag ss_port ss_users_json
+    ss_tag=$(echo "$inbound" | jq -r '.tag')
+    ss_port=$(echo "$inbound" | jq -r '.port')
+    ss_users_json=$(echo "$inbound" | jq -c '.users')
+
+    echo -e "\n${W}[SS 入站: ${ss_tag} / 端口: ${ss_port}]${NC}"
+
+    echo "$ss_users_json" | jq -c '.[]?' | while read -r u; do
+      local ss_name ss_pass
+      ss_name=$(echo "$u" | jq -r '.name // "default"')
+      ss_pass=$(echo "$u" | jq -r '.password // empty')
+      [ -z "${ss_pass:-}" ] && continue
+
+      echo -e " Clash: - {name: \"${ss_name}-ss\", type: ss, server: $ip, port: ${ss_port}, cipher: aes-128-gcm, password: \"${ss_pass}\", udp: true, smux: {enabled: true}}"
+      echo ""
+      echo -e " Quantumult X: shadowsocks=$ip:${ss_port}, method=aes-128-gcm, password=${ss_pass}, udp-relay=true, tag=${ss_name}-ss"
+      echo ""
+    done
+  done
+fi
+
+# Relays: robustly discover relay-* users from ANY inbound users[]
   if echo "$conf" | jq -e '(.inbounds[]? | (.users? // []))[]? | select((.name? // "") | startswith("relay-"))' >/dev/null 2>&1; then
     local wstls_path="/Akaman"
     if echo "$conf" | jq -e '.inbounds[]? | select(.tag=="vless-ws-tls-in")' >/dev/null 2>&1; then
@@ -1274,7 +1394,7 @@ main_menu() {
   while true; do
     clear
     echo -e "${B}┌──────────────────────────────────────────────────┐${NC}"
-    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-1.13.3 │${NC}"
+    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-1.13.6 │${NC}"
     echo -e "${B}└──────────────────────────────────────────────────┘${NC}"
     echo -e "  ${C}1.${NC} 安装/更新 sing-box（APT 源，依赖检测+版本对比）"
     echo -e "  ${C}2.${NC} 清空/重置 config.json（最小模板）"
