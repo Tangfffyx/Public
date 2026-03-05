@@ -1,7 +1,7 @@
 #!/bin/bash
 # ====================================================
 # Project: Sing-box Elite Management System + Domo Installer
-# Version: 2.1.21
+# Version: 2.1.27
 #
 # Menu (per your requirements):
 #  1) Install/Update sing-box (APT repo, deps auto-check incl. sudo)
@@ -20,7 +20,7 @@
 #
 # Notes:
 # - VLESS(TCP) + TUIC(UDP) share 443 OK.
-# - Relay SS is fixed: port 8080 + 2022-blake3-aes-128-gcm.
+# - Relay SS 默认端口 8080（可在添加中转时自定义） + 2022-blake3-aes-128-gcm.
 # - Export does NOT mask secrets (per your preference).
 # ====================================================
 
@@ -1319,6 +1319,11 @@ add_relay_node() {
   echo -e "\n${C}─── 添加/覆盖中转节点 ───${NC}"
   read -r -p " 落地标识 (如 sg01): " land; [ -z "${land:-}" ] && return 1
   read -r -p " 落地 IP 地址: " ip; [ -z "${ip:-}" ] && return 1
+  read -r -p " 落地端口 (默认: 8080): " land_port_in
+  local land_port=${land_port_in:-"8080"}
+  if [[ ! "${land_port:-}" =~ ^[0-9]+$ ]] || [ "${land_port}" -lt 1 ] || [ "${land_port}" -gt 65535 ]; then
+    err "落地端口无效：${land_port}"; pause; return 1
+  fi
     # SS 2022：允许输入 server 或 server:user（均为 Base64），回车随机生成（与 sing-box 文档一致）
   read -r -p " 落地 SS 2022 密钥（回车随机生成）: " pw
   if [ -z "${pw:-}" ]; then
@@ -1379,7 +1384,7 @@ add_relay_node() {
     "type":"shadowsocks",
     "tag":$tag,
     "server":$addr,
-    "server_port":8080,
+    "server_port":'"${land_port}"',
     "method":"2022-blake3-aes-128-gcm",
     "password":$key,
     "multiplex":{"enabled":true}
@@ -1711,7 +1716,7 @@ ${W}[${tag}]${NC}"
 
       if [ "$mapped" = "ss" ] && [ -n "${r_pw:-}" ]; then
         # SS relay: find inbound listen_port and method where this relay user is attached; fallback to parsed port
-        local ss_port ss_m
+        local ss_port ss_m ss_sp pw_out
         ss_port=$(echo "$conf" | jq -r --arg user "$r_full" '
           .inbounds[]?
           | select(.type=="shadowsocks")
@@ -1724,11 +1729,23 @@ ${W}[${tag}]${NC}"
           | select((.users? // []) | any(.name==$user))
           | .method // "aes-128-gcm"
         ' | head -n1)
+        ss_sp=$(echo "$conf" | jq -r --arg user "$r_full" '
+          .inbounds[]?
+          | select(.type=="shadowsocks")
+          | select((.users? // []) | any(.name==$user))
+          | .password // empty
+        ' | head -n1)
         [ -z "${ss_port:-}" ] && ss_port="$port"
 
-        echo -e " Clash: - {name: \"${nodetag}\", type: ss, server: $ip, port: ${ss_port}, cipher: ${ss_m}, password: \"${r_pw}\", udp: true, smux: {enabled: true}}"
+        if [ -n "${ss_sp:-}" ] && [ "${ss_sp}" != "null" ]; then
+          pw_out="${ss_sp}:${r_pw}"
+        else
+          pw_out="${r_pw}"
+        fi
+
+        echo -e " Clash: - {name: \"${nodetag}\", type: ss, server: $ip, port: ${ss_port}, cipher: ${ss_m}, password: \"${pw_out}\", udp: true, smux: {enabled: true}}"
         echo ""
-        echo -e " Quantumult X: shadowsocks=$ip:${ss_port}, method=${ss_m}, password=${r_pw}, udp-relay=true, tag=${nodetag}"
+        echo -e " Quantumult X: shadowsocks=$ip:${ss_port}, method=${ss_m}, password=${pw_out}, udp-relay=true, tag=${nodetag}"
         continue
       fi
       # AnyTLS relay
@@ -1822,7 +1839,7 @@ main_menu() {
   while true; do
     clear
     echo -e "${B}┌──────────────────────────────────────────────────┐${NC}"
-    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-2.1.26 │${NC}"
+    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-2.1.27 │${NC}"
     echo -e "${B}└──────────────────────────────────────────────────┘${NC}"
     echo -e "  ${C}1.${NC} 安装/更新 sing-box"
     echo -e "  ${C}2.${NC} 清空/重置 config.json"
