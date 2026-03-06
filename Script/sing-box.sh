@@ -1,7 +1,7 @@
 #!/bin/bash
 # ====================================================
 # Project: Sing-box Elite Management System + Domo Installer
-# Version: 2.1.30
+# Version: 2.1.31
 #
 # Menu (per your requirements):
 #  1) Install/Update sing-box (APT repo, deps auto-check incl. sudo)
@@ -1789,7 +1789,7 @@ ${W}[${tag}]${NC}"
 sync_system_time_chrony() {
   require_root
   clear
-  echo -e "${R}─── 一键同步系统时间（chrony）───${NC}"
+  echo -e "${R}─── 一键同步系统时间 ───${NC}"
 
   if ! has_cmd apt-get; then
     err "未找到 apt-get，本功能按 APT 包管理设计。"
@@ -1821,24 +1821,38 @@ sync_system_time_chrony() {
 
   local chrono_svc=""
   if has_cmd systemctl; then
-    if systemctl list-unit-files 2>/dev/null | awk '{print $1}' | grep -qx 'chronyd.service'; then
-      chrono_svc="chronyd"
-    elif systemctl list-unit-files 2>/dev/null | awk '{print $1}' | grep -qx 'chrony.service'; then
-      chrono_svc="chrony"
-    elif systemctl status chronyd >/dev/null 2>&1; then
-      chrono_svc="chronyd"
-    elif systemctl status chrony >/dev/null 2>&1; then
-      chrono_svc="chrony"
+    for svc in chronyd chrony; do
+      if systemctl list-unit-files 2>/dev/null | awk '{print $1}' | grep -qx "${svc}.service"; then
+        chrono_svc="$svc"
+        break
+      fi
+    done
+    if [ -z "$chrono_svc" ]; then
+      for svc in chronyd chrony; do
+        if systemctl status "$svc" >/dev/null 2>&1; then
+          chrono_svc="$svc"
+          break
+        fi
+      done
     fi
   fi
-  [ -n "$chrono_svc" ] || chrono_svc="chronyd"
 
-  say "步骤 3/5：启动 ${chrono_svc} 服务"
+  say "步骤 3/5：启动 chrony 服务"
   if has_cmd systemctl; then
-    systemctl restart "$chrono_svc" >/dev/null 2>&1 || { err "启动 ${chrono_svc} 失败。"; pause; return 1; }
+    if [ -n "$chrono_svc" ] && systemctl restart "$chrono_svc" >/dev/null 2>&1; then
+      :
+    elif systemctl restart chronyd >/dev/null 2>&1; then
+      chrono_svc="chronyd"
+    elif systemctl restart chrony >/dev/null 2>&1; then
+      chrono_svc="chrony"
+    else
+      err "启动 chrony 服务失败。"
+      pause
+      return 1
+    fi
     ok "${chrono_svc} 已启动。"
   else
-    err "未找到 systemctl，无法管理 ${chrono_svc} 服务。"
+    err "未找到 systemctl，无法管理 chrony 服务。"
     pause
     return 1
   fi
@@ -1917,7 +1931,7 @@ main_menu() {
   while true; do
     clear
     echo -e "${B}┌──────────────────────────────────────────────────┐${NC}"
-    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-2.1.30 │${NC}"
+    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-2.1.31 │${NC}"
     echo -e "${B}└──────────────────────────────────────────────────┘${NC}"
     echo -e "  ${C}1.${NC} 安装/更新 sing-box"
     echo -e "  ${C}2.${NC} 清空/重置 config.json"
