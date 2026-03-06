@@ -1,7 +1,7 @@
 #!/bin/bash
 # ====================================================
 # Project: Sing-box Elite Management System + Domo Installer
-# Version: 2.1.31
+# Version: 2.1.36
 #
 # Menu (per your requirements):
 #  1) Install/Update sing-box (APT repo, deps auto-check incl. sudo)
@@ -1791,15 +1791,9 @@ sync_system_time_chrony() {
   clear
   echo -e "${R}─── 一键同步系统时间 ───${NC}"
 
-  if ! has_cmd apt-get; then
-    err "未找到 apt-get，本功能按 APT 包管理设计。"
-    pause
-    return 1
-  fi
-
   say "步骤 1/5：检查 chrony 是否安装"
   if ! has_cmd chronyc; then
-    warn "未检测到 chronyc，开始安装 chrony..."
+    warn "未检测到 chrony，开始安装..."
     apt_update_once
     apt-get install -y chrony || { err "chrony 安装失败。"; pause; return 1; }
     ok "chrony 安装完成。"
@@ -1808,74 +1802,48 @@ sync_system_time_chrony() {
   fi
 
   say "步骤 2/5：关闭 systemd-timesyncd（如存在）"
-  if has_cmd timedatectl; then
-    timedatectl set-ntp false >/dev/null 2>&1 || true
-  fi
-  if has_cmd systemctl; then
-    systemctl stop systemd-timesyncd >/dev/null 2>&1 || true
-    systemctl disable systemd-timesyncd >/dev/null 2>&1 || true
-    ok "已尝试关闭 systemd-timesyncd。"
-  else
-    warn "未找到 systemctl，已跳过 systemd-timesyncd 处理。"
-  fi
-
-  local chrono_svc=""
-  if has_cmd systemctl; then
-    for svc in chronyd chrony; do
-      if systemctl list-unit-files 2>/dev/null | awk '{print $1}' | grep -qx "${svc}.service"; then
-        chrono_svc="$svc"
-        break
-      fi
-    done
-    if [ -z "$chrono_svc" ]; then
-      for svc in chronyd chrony; do
-        if systemctl status "$svc" >/dev/null 2>&1; then
-          chrono_svc="$svc"
-          break
-        fi
-      done
-    fi
-  fi
+  timedatectl set-ntp false >/dev/null 2>&1 || true
+  systemctl stop systemd-timesyncd >/dev/null 2>&1 || true
+  systemctl disable systemd-timesyncd >/dev/null 2>&1 || true
+  ok "已尝试关闭 systemd-timesyncd。"
 
   say "步骤 3/5：启动 chrony 服务"
-  if has_cmd systemctl; then
-    if [ -n "$chrono_svc" ] && systemctl restart "$chrono_svc" >/dev/null 2>&1; then
-      :
-    elif systemctl restart chronyd >/dev/null 2>&1; then
-      chrono_svc="chronyd"
-    elif systemctl restart chrony >/dev/null 2>&1; then
-      chrono_svc="chrony"
-    else
-      err "启动 chrony 服务失败。"
-      pause
-      return 1
-    fi
-    ok "${chrono_svc} 已启动。"
+  systemctl stop chrony >/dev/null 2>&1 || true
+  rm -f /run/chrony/chronyd.pid >/dev/null 2>&1 || true
+  systemctl start chrony >/dev/null 2>&1 || {
+    err "启动 chrony 服务失败。"
+    pause
+    return 1
+  }
+
+  sleep 1
+  if chronyc tracking >/dev/null 2>&1; then
+    ok "chrony 已运行。"
   else
-    err "未找到 systemctl，无法管理 chrony 服务。"
+    err "chrony 启动后无法通信。"
     pause
     return 1
   fi
 
-  say "步骤 4/5：设置 ${chrono_svc} 开机自启"
-  systemctl enable "$chrono_svc" >/dev/null 2>&1 || { err "设置 ${chrono_svc} 开机自启失败。"; pause; return 1; }
-  ok "${chrono_svc} 已设置为开机自启。"
+  say "步骤 4/5：设置 chrony 开机自启"
+  systemctl enable chrony >/dev/null 2>&1 || {
+    err "设置 chrony 开机自启失败。"
+    pause
+    return 1
+  }
+  ok "chrony 已设置为开机自启。"
 
   say "步骤 5/5：执行一次强制时间同步"
-  chronyc -a makestep >/dev/null 2>&1 || { err "chronyc makestep 执行失败。"; pause; return 1; }
+  chronyc -a makestep >/dev/null 2>&1 || {
+    err "时间同步失败。"
+    pause
+    return 1
+  }
   ok "时间同步完成。"
 
-  echo ""
-  if has_cmd chronyc; then
-    say "当前同步状态（chronyc tracking）："
-    chronyc tracking 2>/dev/null || true
-  fi
-  echo ""
-  if has_cmd timedatectl; then
-    say "当前时间状态（timedatectl）："
-    timedatectl 2>/dev/null || true
-  fi
-
+  echo
+  say "当前同步状态："
+  chronyc tracking 2>/dev/null || true
   pause
 }
 
@@ -1931,7 +1899,7 @@ main_menu() {
   while true; do
     clear
     echo -e "${B}┌──────────────────────────────────────────────────┐${NC}"
-    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-2.1.31 │${NC}"
+    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-2.1.36 │${NC}"
     echo -e "${B}└──────────────────────────────────────────────────┘${NC}"
     echo -e "  ${C}1.${NC} 安装/更新 sing-box"
     echo -e "  ${C}2.${NC} 清空/重置 config.json"
