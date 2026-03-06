@@ -1,7 +1,7 @@
 #!/bin/bash
 # ====================================================
 # Project: Sing-box Elite Management System + Domo Installer
-# Version: 2.1.29
+# Version: 2.1.30
 #
 # Menu (per your requirements):
 #  1) Install/Update sing-box (APT repo, deps auto-check incl. sudo)
@@ -1784,6 +1784,88 @@ ${W}[${tag}]${NC}"
 
 
 # ====================================================
+# 7) One-click sync system time (chrony/chronyc)
+# ====================================================
+sync_system_time_chrony() {
+  require_root
+  clear
+  echo -e "${R}─── 一键同步系统时间（chrony）───${NC}"
+
+  if ! has_cmd apt-get; then
+    err "未找到 apt-get，本功能按 APT 包管理设计。"
+    pause
+    return 1
+  fi
+
+  say "步骤 1/5：检查 chrony 是否安装"
+  if ! has_cmd chronyc; then
+    warn "未检测到 chronyc，开始安装 chrony..."
+    apt_update_once
+    apt-get install -y chrony || { err "chrony 安装失败。"; pause; return 1; }
+    ok "chrony 安装完成。"
+  else
+    ok "已检测到 chrony。"
+  fi
+
+  say "步骤 2/5：关闭 systemd-timesyncd（如存在）"
+  if has_cmd timedatectl; then
+    timedatectl set-ntp false >/dev/null 2>&1 || true
+  fi
+  if has_cmd systemctl; then
+    systemctl stop systemd-timesyncd >/dev/null 2>&1 || true
+    systemctl disable systemd-timesyncd >/dev/null 2>&1 || true
+    ok "已尝试关闭 systemd-timesyncd。"
+  else
+    warn "未找到 systemctl，已跳过 systemd-timesyncd 处理。"
+  fi
+
+  local chrono_svc=""
+  if has_cmd systemctl; then
+    if systemctl list-unit-files 2>/dev/null | awk '{print $1}' | grep -qx 'chronyd.service'; then
+      chrono_svc="chronyd"
+    elif systemctl list-unit-files 2>/dev/null | awk '{print $1}' | grep -qx 'chrony.service'; then
+      chrono_svc="chrony"
+    elif systemctl status chronyd >/dev/null 2>&1; then
+      chrono_svc="chronyd"
+    elif systemctl status chrony >/dev/null 2>&1; then
+      chrono_svc="chrony"
+    fi
+  fi
+  [ -n "$chrono_svc" ] || chrono_svc="chronyd"
+
+  say "步骤 3/5：启动 ${chrono_svc} 服务"
+  if has_cmd systemctl; then
+    systemctl restart "$chrono_svc" >/dev/null 2>&1 || { err "启动 ${chrono_svc} 失败。"; pause; return 1; }
+    ok "${chrono_svc} 已启动。"
+  else
+    err "未找到 systemctl，无法管理 ${chrono_svc} 服务。"
+    pause
+    return 1
+  fi
+
+  say "步骤 4/5：设置 ${chrono_svc} 开机自启"
+  systemctl enable "$chrono_svc" >/dev/null 2>&1 || { err "设置 ${chrono_svc} 开机自启失败。"; pause; return 1; }
+  ok "${chrono_svc} 已设置为开机自启。"
+
+  say "步骤 5/5：执行一次强制时间同步"
+  chronyc -a makestep >/dev/null 2>&1 || { err "chronyc makestep 执行失败。"; pause; return 1; }
+  ok "时间同步完成。"
+
+  echo ""
+  if has_cmd chronyc; then
+    say "当前同步状态（chronyc tracking）："
+    chronyc tracking 2>/dev/null || true
+  fi
+  echo ""
+  if has_cmd timedatectl; then
+    say "当前时间状态（timedatectl）："
+    timedatectl 2>/dev/null || true
+  fi
+
+  pause
+}
+
+# ====================================================
 # 8) Uninstall sing-box (keep /etc/sing-box/)
 # ====================================================
 uninstall_singbox_keep_config() {
@@ -1835,7 +1917,7 @@ main_menu() {
   while true; do
     clear
     echo -e "${B}┌──────────────────────────────────────────────────┐${NC}"
-    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-2.1.29 │${NC}"
+    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-2.1.30 │${NC}"
     echo -e "${B}└──────────────────────────────────────────────────┘${NC}"
     echo -e "  ${C}1.${NC} 安装/更新 sing-box"
     echo -e "  ${C}2.${NC} 清空/重置 config.json"
@@ -1843,7 +1925,8 @@ main_menu() {
     echo -e "  ${C}4.${NC} 核心模块管理"
     echo -e "  ${C}5.${NC} 中转节点管理"
     echo -e "  ${C}6.${NC} 导出客户端配置"
-    echo -e "  ${C}7.${NC} 卸载 sing-box"
+    echo -e "  ${C}7.${NC} 一键同步系统时间 (chrony)"
+    echo -e "  ${C}8.${NC} 卸载 sing-box"
     echo -e "  ${R}0.${NC} 退出系统"
     echo -e "${B}────────────────────────────────────────────────────${NC}"
     read -r -p " 请选择操作指令: " opt
@@ -1854,7 +1937,8 @@ main_menu() {
       4) sync_core_services ;;
       5) manage_relay_nodes ;;
       6) export_configs ;;
-      7) uninstall_singbox_keep_config ;;
+      7) sync_system_time_chrony ;;
+      8) uninstall_singbox_keep_config ;;
       0|q|Q) exit 0 ;;
       *) warn "无效输入：$opt"; sleep 1 ;;
     esac
