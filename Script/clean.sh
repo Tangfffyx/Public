@@ -1,4 +1,3 @@
-cat > /root/clean_disk.sh <<'EOF'
 #!/usr/bin/env bash
 set -e
 
@@ -40,4 +39,3 @@ echo "========== 清理完成 =========="
 echo
 echo "清理后磁盘占用："
 df -h /
-EOF
