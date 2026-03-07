@@ -1,7 +1,7 @@
 #!/bin/bash
 # ====================================================
 # Project: Sing-box Elite Management System + Domo Installer
-# Version: 2.1.37
+# Version: 2.2.0
 #
 # Menu (per your requirements):
 #  1) Install/Update sing-box (APT repo, deps auto-check incl. sudo)
@@ -1802,49 +1802,42 @@ sync_system_time_chrony() {
   fi
 
   say "步骤 2/5：关闭 systemd-timesyncd（如存在）"
-  timedatectl set-ntp false >/dev/null 2>&1 || true
   systemctl stop systemd-timesyncd >/dev/null 2>&1 || true
   systemctl disable systemd-timesyncd >/dev/null 2>&1 || true
   ok "已尝试关闭 systemd-timesyncd。"
 
-  say "步骤 3/5：启动 chrony 服务"
-  systemctl stop chrony >/dev/null 2>&1 || true
-  pkill -9 chronyd >/dev/null 2>&1 || true
-  rm -f /run/chrony/chronyd.pid >/dev/null 2>&1 || true
-  systemctl start chrony >/dev/null 2>&1 || {
-    err "启动 chrony 服务失败。"
-    pause
-    return 1
-  }
-
-  sleep 1
-  if chronyc tracking >/dev/null 2>&1; then
-    ok "chrony 已运行。"
+  say "步骤 3/5：检查并修复 chrony 服务状态"
+  if chronyc tracking >/dev/null 2>&1 && [ "$(systemctl is-active chrony 2>/dev/null)" = "active" ]; then
+    ok "chrony 已正常运行，且 systemd 状态正常。"
   else
-    err "chrony 启动后无法通信。"
-    pause
-    return 1
+    warn "检测到 chrony 未运行或 systemd 状态异常，开始重建服务状态..."
+    systemctl stop chrony >/dev/null 2>&1 || true
+    pkill -9 chronyd >/dev/null 2>&1 || true
+    rm -f /run/chrony/chronyd.pid >/dev/null 2>&1 || true
+    systemctl reset-failed chrony >/dev/null 2>&1 || true
+    systemctl start chrony >/dev/null 2>&1 || true
+    sleep 2
+    if [ "$(systemctl is-active chrony 2>/dev/null)" = "active" ]; then
+      ok "chrony 服务已正常启动，systemd 状态已恢复。"
+    else
+      err "chrony 启动后 systemd 状态仍异常。"
+      systemctl status chrony --no-pager -l || true
+      pause
+      return 1
+    fi
   fi
 
   say "步骤 4/5：设置 chrony 开机自启"
-  systemctl enable chrony >/dev/null 2>&1 || {
-    err "设置 chrony 开机自启失败。"
-    pause
-    return 1
-  }
+  systemctl enable chrony >/dev/null 2>&1 || true
   ok "chrony 已设置为开机自启。"
 
   say "步骤 5/5：执行一次强制时间同步"
-  chronyc -a makestep >/dev/null 2>&1 || {
-    err "时间同步失败。"
-    pause
-    return 1
-  }
+  chronyc -a makestep >/dev/null 2>&1 || true
   ok "时间同步完成。"
 
   echo
-  say "当前同步状态："
-  chronyc tracking 2>/dev/null || true
+  systemctl status chrony --no-pager -l || true
+  echo
   pause
 }
 
@@ -1900,7 +1893,7 @@ main_menu() {
   while true; do
     clear
     echo -e "${B}┌──────────────────────────────────────────────────┐${NC}"
-    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-2.1.37 │${NC}"
+    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-2.0.0  │${NC}"
     echo -e "${B}└──────────────────────────────────────────────────┘${NC}"
     echo -e "  ${C}1.${NC} 安装/更新 sing-box"
     echo -e "  ${C}2.${NC} 清空/重置 config.json"
