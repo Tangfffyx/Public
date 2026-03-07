@@ -1,7 +1,7 @@
 #!/bin/bash
 # ====================================================
 # Project: Sing-box Elite Management System + Domo Installer
-# Version: 2.1.36
+# Version: 2.1.37
 #
 # Menu (per your requirements):
 #  1) Install/Update sing-box (APT repo, deps auto-check incl. sudo)
@@ -1809,6 +1809,7 @@ sync_system_time_chrony() {
 
   say "步骤 3/5：启动 chrony 服务"
   systemctl stop chrony >/dev/null 2>&1 || true
+  pkill -9 chronyd >/dev/null 2>&1 || true
   rm -f /run/chrony/chronyd.pid >/dev/null 2>&1 || true
   systemctl start chrony >/dev/null 2>&1 || {
     err "启动 chrony 服务失败。"
@@ -1899,7 +1900,7 @@ main_menu() {
   while true; do
     clear
     echo -e "${B}┌──────────────────────────────────────────────────┐${NC}"
-    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-2.1.36 │${NC}"
+    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-2.1.37 │${NC}"
     echo -e "${B}└──────────────────────────────────────────────────┘${NC}"
     echo -e "  ${C}1.${NC} 安装/更新 sing-box"
     echo -e "  ${C}2.${NC} 清空/重置 config.json"
