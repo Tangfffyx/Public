@@ -1,7 +1,7 @@
 #!/bin/bash
 # ====================================================
 # Project: Sing-box Elite Management System + Domo Installer
-# Version: 2.2.0
+# Version: 2.2.4
 #
 # Menu (per your requirements):
 #  1) Install/Update sing-box (APT repo, deps auto-check incl. sudo)
@@ -34,6 +34,25 @@ LEGACY_VLESS_TAG="vless-main-in"
 LEGACY_VLESS_USER="direct-user"
 NEW_VLESS_TAG="vless-reality-in"
 NEW_VLESS_USER="vless-reality-user"
+
+generate_random_alpha_path() {
+  local s=""
+  while [ ${#s} -lt 7 ]; do
+    s="$(openssl rand -base64 32 2>/dev/null | tr -dc 'A-Za-z' | head -c 7 || true)"
+  done
+  echo "/${s}"
+}
+
+normalize_ws_path() { # $1 raw
+  local p="${1:-}"
+  if [ -z "${p}" ]; then
+    generate_random_alpha_path
+    return 0
+  fi
+  [[ "$p" != /* ]] && p="/$p"
+  echo "$p"
+}
+
 
 has_inbound_tag() { # $1 tag
   local t="$1"
@@ -628,7 +647,6 @@ sync_core_services() {
   init_manager_env
   local conf; conf=$(cat "$CONFIG_FILE")
 
-  # --- 强力修复：进入管理前强制格式化 ---
   if echo "$conf" | jq -e 'type == "array"' >/dev/null 2>&1; then
     conf=$(echo "$conf" | jq '{
       "log": {"level": "info","timestamp": true},
@@ -637,18 +655,12 @@ sync_core_services() {
       "route": {"rules": []}
     }')
   fi
-  # 补全字段
   conf=$(echo "$conf" | jq '
     .inbounds = (.inbounds // []) |
     .outbounds = (.outbounds // []) |
     .route = (.route // {"rules":[]}) |
     .route.rules = (.route.rules // [])
   ')
-  # ----------------------------------
-
-  gen_random_high_port() {
-    echo $(( (RANDOM % 55536) + 10000 ))
-  }
 
   port_is_in_use() { # $1 json, $2 port, $3 exclude_tag
     local __json="$1"
@@ -667,36 +679,40 @@ sync_core_services() {
     echo -e "${B}│                 核心模块管理 (Install/Uninstall)    │${NC}"
     echo -e "${B}└──────────────────────────────────────────────────┘${NC}"
 
-    # 中转节点状态展示
     mapfile -t __relay_nodes < <(echo "$conf" | jq -r '(.inbounds[]? | (.users? // []))[]? | select((.name? // "") | startswith("relay-")) | .name' 2>/dev/null | sed 's/relay-//')
     if [ ${#__relay_nodes[@]} -eq 0 ]; then
-        echo -e "${Y}当前暂无中转节点。${NC}"
+      echo -e "${Y}当前暂无中转节点。${NC}"
     else
-        echo -e "${C}当前已配置中转节点:${NC} ${G}${#__relay_nodes[@]} 个${NC}"
-        for __n in "${__relay_nodes[@]}"; do
-            echo -e "  - ${G}${__n}${NC}"
-        done
+      echo -e "${C}当前已配置中转节点:${NC} ${G}${#__relay_nodes[@]} 个${NC}"
+      for __n in "${__relay_nodes[@]}"; do
+        echo -e "  - ${G}${__n}${NC}"
+      done
     fi
 
-    local has_wstls has_ws has_ss has_tuic has_vless has_anytls
-    has_wstls=$(echo "$conf" | jq -e '.inbounds[]? | select(((.tag//"")|test("^vless-wstls-[0-9]+-in$")) or (.tag=="vless-ws-tls-in"))' >/dev/null 2>&1 && echo "true" || echo "false")
-    has_ws=$(echo "$conf" | jq -e '.inbounds[]? | select(((.tag//"")|test("^vless-ws-[0-9]+-in$")) or (.tag=="vless-ws-in"))' >/dev/null 2>&1 && echo "true" || echo "false")
-    has_ss=$(echo "$conf" | jq -e '.inbounds[]? | select(.type=="shadowsocks") | select(((.tag//"")|test("^ss-[0-9]+-in$")) or ((.tag//"")|startswith("ss-in")))' >/dev/null 2>&1 && echo "true" || echo "false")
-    ss_ports=$(echo "$conf" | jq -r '.inbounds[]? | select(.type=="shadowsocks") | select(((.tag//"")|test("^ss-[0-9]+-in$")) or ((.tag//"")|startswith("ss-in"))) | (.listen_port // 0)' 2>/dev/null | awk '$1>0' | sort -n -u | tr "\n" " " | sed 's/[[:space:]]*$//')
-    has_tuic=$(echo "$conf" | jq -e '.inbounds[]? | select(((.tag//"")|test("^tuic-[0-9]+-in$")) or (.tag=="tuic-in"))' >/dev/null 2>&1 && echo "true" || echo "false")
+    local has_vless has_anytls has_ss has_vmess_ws has_vless_ws has_tuic has_legacy_wstls ss_ports
     has_vless=$(echo "$conf" | jq -e '.inbounds[]? | select(((.tag//"")|test("^vless-reality-[0-9]+-in$")) or (.tag=="vless-reality-in") or (.tag=="vless-main-in"))' >/dev/null 2>&1 && echo "true" || echo "false")
     has_anytls=$(echo "$conf" | jq -e '.inbounds[]? | select((.type=="anytls") or ((.tag//"")|test("^anytls-[0-9]+-in$")))' >/dev/null 2>&1 && echo "true" || echo "false")
+    has_ss=$(echo "$conf" | jq -e '.inbounds[]? | select(.type=="shadowsocks") | select(((.tag//"")|test("^ss-[0-9]+-in$")) or ((.tag//"")|startswith("ss-in")))' >/dev/null 2>&1 && echo "true" || echo "false")
+    ss_ports=$(echo "$conf" | jq -r '.inbounds[]? | select(.type=="shadowsocks") | select(((.tag//"")|test("^ss-[0-9]+-in$")) or ((.tag//"")|startswith("ss-in"))) | (.listen_port // 0)' 2>/dev/null | awk '$1>0' | sort -n -u | tr "
+" " " | sed 's/[[:space:]]*$//')
+    has_vmess_ws=$(echo "$conf" | jq -e '.inbounds[]? | select(((.tag//"")|test("^vmess-ws-[0-9]+-in$")) or (.tag=="vmess-ws-in"))' >/dev/null 2>&1 && echo "true" || echo "false")
+    has_vless_ws=$(echo "$conf" | jq -e '.inbounds[]? | select(((.tag//"")|test("^vless-ws-[0-9]+-in$")) or (.tag=="vless-ws-in"))' >/dev/null 2>&1 && echo "true" || echo "false")
+    has_legacy_wstls=$(echo "$conf" | jq -e '.inbounds[]? | select(((.tag//"")|test("^vless-wstls-[0-9]+-in$")) or (.tag=="vless-ws-tls-in"))' >/dev/null 2>&1 && echo "true" || echo "false")
+    has_tuic=$(echo "$conf" | jq -e '.inbounds[]? | select(((.tag//"")|test("^tuic-[0-9]+-in$")) or (.tag=="tuic-in"))' >/dev/null 2>&1 && echo "true" || echo "false")
 
     echo -e "${C}当前状态:${NC}"
-    echo -e "  [1] vless-ws-tls  : $( [ "$has_wstls" = "true" ] && echo -e "${G}已安装${NC}" || echo -e "${Y}未安装${NC}" )"
-    echo -e "  [2] vless-ws      : $( [ "$has_ws" = "true" ] && echo -e "${G}已安装${NC}" || echo -e "${Y}未安装${NC}" )"
+    echo -e "  [1] vless-reality : $( [ "$has_vless" = "true" ] && echo -e "${G}已安装${NC}" || echo -e "${Y}未安装${NC}" )"
+    echo -e "  [2] anytls        : $( [ "$has_anytls" = "true" ] && echo -e "${G}已安装${NC}" || echo -e "${Y}未安装${NC}" )"
     echo -e "  [3] shadowsocks   : $( [ "$has_ss" = "true" ] && echo -e "${G}已安装${NC}" || echo -e "${Y}未安装${NC}" )"
     if [ "$has_ss" = "true" ] && [ -n "${ss_ports:-}" ]; then
       echo -e "      已安装 SS 端口: ${G}${ss_ports}${NC}"
     fi
-    echo -e "  [4] tuic-v5       : $( [ "$has_tuic" = "true" ] && echo -e "${G}已安装${NC}" || echo -e "${Y}未安装${NC}" )"
-    echo -e "  [5] vless-reality : $( [ "$has_vless" = "true" ] && echo -e "${G}已安装${NC}" || echo -e "${Y}未安装${NC}" )"
-    echo -e "  [6] anytls        : $( [ "$has_anytls" = "true" ] && echo -e "${G}已安装${NC}" || echo -e "${Y}未安装${NC}" )"
+    echo -e "  [4] vmess-ws      : $( [ "$has_vmess_ws" = "true" ] && echo -e "${G}已安装${NC}" || echo -e "${Y}未安装${NC}" )"
+    echo -e "  [5] vless-ws      : $( [ "$has_vless_ws" = "true" ] && echo -e "${G}已安装${NC}" || echo -e "${Y}未安装${NC}" )"
+    echo -e "  [6] tuic-v5       : $( [ "$has_tuic" = "true" ] && echo -e "${G}已安装${NC}" || echo -e "${Y}未安装${NC}" )"
+    if [ "$has_legacy_wstls" = "true" ]; then
+      echo -e "      ${Y}检测到旧版 vless-ws-tls，已保留兼容识别${NC}"
+    fi
 
     echo -e "${B}────────────────────────────────────────────────────${NC}"
     echo -e "  ${C}a.${NC} 安装"
@@ -712,7 +728,6 @@ sync_core_services() {
       return 0
     fi
 
-    # helper: parse "1+2+3" -> unique list
     parse_plus() {
       local s="$1"
       local -A seen=()
@@ -730,13 +745,14 @@ sync_core_services() {
     }
 
     if [[ "${act:-}" == "1" ]]; then
-      echo -e "\n${C}可安装模块（多个用 + 连接，如 1+3+5）:${NC}"
-      echo -e "  [1] vless-ws-tls"
-      echo -e "  [2] vless-ws"
+      echo -e "
+${C}可安装模块（多个用 + 连接，如 1+3+5）:${NC}"
+      echo -e "  [1] vless-reality"
+      echo -e "  [2] anytls"
       echo -e "  [3] shadowsocks"
-      echo -e "  [4] tuic-v5"
-      echo -e "  [5] vless-reality"
-      echo -e "  [6] anytls"
+      echo -e "  [4] vmess-ws"
+      echo -e "  [5] vless-ws"
+      echo -e "  [6] tuic-v5"
       read -r -p " 请输入要安装的模块编号: " sel
       local choices; choices="$(parse_plus "${sel:-}")"
       [ -z "${choices:-}" ] && { warn "未选择任何模块。"; pause; continue; }
@@ -746,67 +762,79 @@ sync_core_services() {
       for c in $choices; do
         case "$c" in
           1)
-            if [ "$has_wstls" = "true" ]; then
-              echo -e " vless-ws-tls 模块: ${G}已安装${NC}"
+            if [ "$has_vless" = "true" ]; then
+              echo -e " vless-reality 模块: ${G}已安装${NC}"
               continue
             fi
-            echo -e " vless-ws-tls 模块: ${Y}未安装，开始安装...${NC}"
-            read -r -p " 端口 (默认: 8001): " wstls_port_in
-            local wstls_port=${wstls_port_in:-"8001"}
-            while port_is_in_use "$updated_json" "${wstls_port}" ""; do
-              warn "端口 ${wstls_port} 已被其它入站占用，请更换端口。"
-              read -r -p " 端口: " wstls_port_in
-              wstls_port=${wstls_port_in}
-              [ -z "${wstls_port:-}" ] && wstls_port="8001"
+            echo -e " vless-reality 模块: ${Y}未安装，开始安装...${NC}"
+            read -r -p " 监听端口 (默认: 443): " v_port_in
+            local v_port=${v_port_in:-"443"}
+            while port_is_in_use "$updated_json" "${v_port}" ""; do
+              warn "端口 ${v_port} 已被其它入站占用，请更换端口。"
+              read -r -p " 监听端口: " v_port_in
+              v_port=${v_port_in:-"443"}
             done
-            read -r -p " WS Path (默认: /Akaman): " wstls_path_in
-            local wstls_path=${wstls_path_in:-"/Akaman"}
-
-            local wstls_uuid; wstls_uuid=$(sing-box generate uuid)
-            local wstls_tag="vless-wstls-${wstls_port}-in"
-            local in_wstls
-            in_wstls=$(jq -n --arg uuid "$wstls_uuid" --arg name "$wstls_tag" --arg path "$wstls_path" --argjson port "$wstls_port" '{
+            read -r -p " SNI 域名 (默认: www.icloud.com): " v_sni_in
+            local v_sni=${v_sni_in:-"www.icloud.com"}
+            local v_uuid v_priv_out v_pub_out v_priv v_pub v_sid v_tag in_v
+            v_uuid=$(sing-box generate uuid)
+            v_priv_out=$(sing-box generate reality-keypair 2>/dev/null || true)
+            v_priv=$(echo "$v_priv_out" | awk '/PrivateKey/ {print $2}' | head -n1)
+            v_pub_out=$(sing-box generate reality-keypair 2>/dev/null || true)
+            v_pub=$(echo "$v_pub_out" | awk '/PublicKey/ {print $2}' | head -n1)
+            [ -z "${v_priv:-}" ] && v_priv="YOUR_PRIVATE_KEY"
+            [ -z "${v_pub:-}" ] && v_pub="YOUR_PUBLIC_KEY"
+            v_sid=$(openssl rand -hex 4)
+            v_tag="vless-reality-${v_port}-in"
+            in_v=$(jq -n --arg uuid "$v_uuid" --arg tag "$v_tag" --arg sni "$v_sni" --arg sid "$v_sid" --arg priv "$v_priv" --argjson port "$v_port" '{
               "type":"vless",
-              "tag":$name,
-              "listen":"127.0.0.1",
-              "listen_port":$port,
-              "users":[{"name":$name,"uuid":$uuid}],
-              "transport":{"type":"ws","path":$path,"max_early_data":2048,"early_data_header_name":"Sec-WebSocket-Protocol"}
-            }')
-            updated_json=$(echo "$updated_json" | jq --arg t "$wstls_tag" '.inbounds |= map(select(.tag != $t))')
-            updated_json=$(echo "$updated_json" | jq --argjson x "$in_wstls" '.inbounds += [$x]')
-            ;;
-          2)
-            if [ "$has_ws" = "true" ]; then
-              echo -e " vless-ws 模块: ${G}已安装${NC}"
-              continue
-            fi
-            echo -e " vless-ws 模块: ${Y}未安装，开始安装...${NC}"
-            local def_port; def_port=45678
-            read -r -p " 端口 (默认: ${def_port}): " ws_port_in
-            local ws_port=${ws_port_in:-"$def_port"}
-            while port_is_in_use "$updated_json" "${ws_port}" ""; do
-              warn "端口 ${ws_port} 已被其它入站占用，请更换端口。"
-              read -r -p " 端口: " ws_port_in
-              ws_port=${ws_port_in}
-              [ -z "${ws_port:-}" ] && ws_port="$def_port"
-            done
-            read -r -p " WS Path (默认: /Akaman): " ws_path_in
-            local ws_path=${ws_path_in:-"/Akaman"}
-
-            local ws_uuid; ws_uuid=$(sing-box generate uuid)
-            local ws_tag="vless-ws-${ws_port}-in"
-            local in_w
-            in_w=$(jq -n --arg uuid "$ws_uuid" --arg name "$ws_tag" --arg path "$ws_path" --argjson port "$ws_port" '{
-              "type":"vless",
-              "tag":$name,
+              "tag":$tag,
               "listen":"::",
               "listen_port":$port,
-              "users":[{"name":$name,"uuid":$uuid}],
-              "transport":{"type":"ws","path":$path,"max_early_data":2048,"early_data_header_name":"Sec-WebSocket-Protocol"}
+              "users":[{"name":$tag,"uuid":$uuid,"flow":"xtls-rprx-vision"}],
+              "tls":{
+                "enabled":true,
+                "server_name":$sni,
+                "reality":{
+                  "enabled":true,
+                  "handshake":{"server":$sni,"server_port":443},
+                  "private_key":$priv,
+                  "short_id":[$sid]
+                }
+              }
             }')
-            updated_json=$(echo "$updated_json" | jq --arg t "$ws_tag" '.inbounds |= map(select(.tag != $t))')
-            updated_json=$(echo "$updated_json" | jq --argjson w "$in_w" '.inbounds += [$w]')
+            updated_json=$(echo "$updated_json" | jq --arg t "$v_tag" '.inbounds |= map(select(.tag != $t))')
+            updated_json=$(echo "$updated_json" | jq --argjson x "$in_v" '.inbounds += [$x]')
+            ok "Reality Public Key: ${v_pub}"
+            ;;
+          2)
+            if [ "$has_anytls" = "true" ]; then
+              echo -e " anytls 模块: ${G}已安装${NC}"
+              continue
+            fi
+            echo -e " anytls 模块: ${Y}未安装，开始安装...${NC}"
+            read -r -p " AnyTLS 端口 (默认: 443): " a_port_in
+            local a_port=${a_port_in:-"443"}
+            while port_is_in_use "$updated_json" "${a_port}" ""; do
+              warn "端口 ${a_port} 已被其它入站占用，请更换端口。"
+              read -r -p " 监听端口: " a_port_in
+              a_port=${a_port_in:-"443"}
+            done
+            read -r -p " AnyTLS 域名 (默认: www.icloud.com): " a_sni_in
+            local a_sni=${a_sni_in:-"www.icloud.com"}
+            local a_pass a_tag in_a
+            a_pass=$(openssl rand -base64 16)
+            a_tag="anytls-${a_port}-in"
+            in_a=$(jq -n --arg pass "$a_pass" --arg tag "$a_tag" --arg sni "$a_sni" --argjson port "$a_port" '{
+              "type":"anytls",
+              "tag":$tag,
+              "listen":"::",
+              "listen_port":$port,
+              "users":[{"name":$tag,"password":$pass}],
+              "tls":{"enabled":true,"server_name":$sni}
+            }')
+            updated_json=$(echo "$updated_json" | jq --arg t "$a_tag" '.inbounds |= map(select(.tag != $t))')
+            updated_json=$(echo "$updated_json" | jq --argjson x "$in_a" '.inbounds += [$x]')
             ;;
           3)
             if [ "$has_ss" = "true" ]; then
@@ -826,8 +854,7 @@ sync_core_services() {
               while true; do
                 warn "端口 ${ss_port} 已被其它协议占用，请更换端口。"
                 read -r -p " Shadowsocks 监听端口: " ss_port_in
-                ss_port=${ss_port_in:-""}
-                [ -z "${ss_port:-}" ] && ss_port="8080"
+                ss_port=${ss_port_in:-"8080"}
                 if ! echo "$updated_json" | jq -e --arg p "$ss_port" '
                   .inbounds[]?
                   | select((.listen_port? // empty | tostring) == $p)
@@ -838,13 +865,11 @@ sync_core_services() {
               done
             fi
 
-            local ss_server_p ss_user_p
+            local ss_server_p ss_user_p ss_tag new_ss_user
             ss_server_p=$(openssl rand -base64 16)
             ss_user_p=$(openssl rand -base64 16)
             ok "已生成 Shadowsocks 2022 密码（server/user）。"
-
-            local ss_tag="ss-${ss_port}-in"
-            local new_ss_user
+            ss_tag="ss-${ss_port}-in"
             new_ss_user=$(jq -n --arg name "$ss_tag" --arg p "$ss_user_p" '{"name":$name,"password":$p}')
 
             updated_json=$(echo "$updated_json" | jq --argjson u "$new_ss_user" --arg port "$ss_port" --arg tag "$ss_tag" --arg sp "$ss_server_p" '
@@ -867,6 +892,68 @@ sync_core_services() {
             ')
             ;;
           4)
+            if [ "$has_vmess_ws" = "true" ]; then
+              echo -e " vmess-ws 模块: ${G}已安装${NC}"
+              continue
+            fi
+            echo -e " vmess-ws 模块: ${Y}未安装，开始安装...${NC}"
+            read -r -p " 监听地址 (默认: 127.0.0.1): " vmess_listen_in
+            local vmess_listen=${vmess_listen_in:-"127.0.0.1"}
+            read -r -p " 监听端口 (默认: 8001): " vmess_port_in
+            local vmess_port=${vmess_port_in:-"8001"}
+            while port_is_in_use "$updated_json" "${vmess_port}" ""; do
+              warn "端口 ${vmess_port} 已被其它入站占用，请更换端口。"
+              read -r -p " 监听端口: " vmess_port_in
+              vmess_port=${vmess_port_in:-"8001"}
+            done
+            read -r -p " WS Path (回车随机生成 7 位字母路径): " vmess_path_in
+            local vmess_path; vmess_path=$(normalize_ws_path "${vmess_path_in:-}")
+            local vmess_uuid vmess_tag in_vmess
+            vmess_uuid=$(sing-box generate uuid)
+            vmess_tag="vmess-ws-${vmess_port}-in"
+            in_vmess=$(jq -n --arg uuid "$vmess_uuid" --arg tag "$vmess_tag" --arg listen "$vmess_listen" --arg path "$vmess_path" --argjson port "$vmess_port" '{
+              "type":"vmess",
+              "tag":$tag,
+              "listen":$listen,
+              "listen_port":$port,
+              "users":[{"name":$tag,"uuid":$uuid,"alterId":0}],
+              "transport":{"type":"ws","path":$path,"max_early_data":2048,"early_data_header_name":"Sec-WebSocket-Protocol"}
+            }')
+            updated_json=$(echo "$updated_json" | jq --arg t "$vmess_tag" '.inbounds |= map(select(.tag != $t))')
+            updated_json=$(echo "$updated_json" | jq --argjson x "$in_vmess" '.inbounds += [$x]')
+            ;;
+          5)
+            if [ "$has_vless_ws" = "true" ]; then
+              echo -e " vless-ws 模块: ${G}已安装${NC}"
+              continue
+            fi
+            echo -e " vless-ws 模块: ${Y}未安装，开始安装...${NC}"
+            read -r -p " 监听地址 (默认: 127.0.0.1): " ws_listen_in
+            local ws_listen=${ws_listen_in:-"127.0.0.1"}
+            read -r -p " 监听端口 (默认: 8001): " ws_port_in
+            local ws_port=${ws_port_in:-"8001"}
+            while port_is_in_use "$updated_json" "${ws_port}" ""; do
+              warn "端口 ${ws_port} 已被其它入站占用，请更换端口。"
+              read -r -p " 监听端口: " ws_port_in
+              ws_port=${ws_port_in:-"8001"}
+            done
+            read -r -p " WS Path (回车随机生成 7 位字母路径): " ws_path_in
+            local ws_path; ws_path=$(normalize_ws_path "${ws_path_in:-}")
+            local ws_uuid ws_tag in_w
+            ws_uuid=$(sing-box generate uuid)
+            ws_tag="vless-ws-${ws_port}-in"
+            in_w=$(jq -n --arg uuid "$ws_uuid" --arg tag "$ws_tag" --arg listen "$ws_listen" --arg path "$ws_path" --argjson port "$ws_port" '{
+              "type":"vless",
+              "tag":$tag,
+              "listen":$listen,
+              "listen_port":$port,
+              "users":[{"name":$tag,"uuid":$uuid}],
+              "transport":{"type":"ws","path":$path,"max_early_data":2048,"early_data_header_name":"Sec-WebSocket-Protocol"}
+            }')
+            updated_json=$(echo "$updated_json" | jq --arg t "$ws_tag" '.inbounds |= map(select(.tag != $t))')
+            updated_json=$(echo "$updated_json" | jq --argjson x "$in_w" '.inbounds += [$x]')
+            ;;
+          6)
             if [ "$has_tuic" = "true" ]; then
               echo -e " tuic-v5 模块: ${G}已安装${NC}"
               continue
@@ -877,102 +964,28 @@ sync_core_services() {
             while port_is_in_use "$updated_json" "${t_port}" ""; do
               warn "端口 ${t_port} 已被其它入站占用，请更换端口。"
               read -r -p " 端口: " t_port_in
-              t_port=${t_port_in}
-              [ -z "${t_port:-}" ] && t_port="8443"
+              t_port=${t_port_in:-"8443"}
             done
             read -r -p " TUIC 域名 (默认: www.icloud.com): " t_sni_in
             local t_sni=${t_sni_in:-"www.icloud.com"}
-            local t_pass; t_pass=$(openssl rand -base64 12)
-
-            openssl req -x509 -newkey ec:<(openssl ecparam -name prime256v1) \
-              -keyout /etc/sing-box/tuic.key -out /etc/sing-box/tuic.crt \
-              -days 36500 -nodes -subj "/CN=$t_sni" &> /dev/null || true
-
-            local base_uuid
-            base_uuid=$(echo "$conf" | jq -r '
-              (.inbounds[]? | select(((.tag//"")|test("^vless-reality-[0-9]+-in$")) or (.tag=="vless-reality-in") or (.tag=="vless-main-in")) | .users[0].uuid) // empty
-            ' 2>/dev/null | head -n1)
-            [ -z "${base_uuid:-}" ] && base_uuid=$(sing-box generate uuid)
-
-            local tuic_tag="tuic-${t_port}-in"
-            local in_t
-            in_t=$(jq -n --arg uuid "$base_uuid" --arg name "$tuic_tag" --arg p "$t_pass" --arg sni "$t_sni" --argjson port "$t_port" '{
-              "type":"tuic","tag":$name,"listen":"::","listen_port":$port,
-              "users":[{"name":$name,"uuid":$uuid,"password":$p}],
-              "congestion_control":"bbr",
-              "tls":{"enabled":true,"server_name":$sni,"alpn":["h3"],"certificate_path":"/etc/sing-box/tuic.crt","key_path":"/etc/sing-box/tuic.key"}
-            }')
-            updated_json=$(echo "$updated_json" | jq --arg t "$tuic_tag" '.inbounds |= map(select(.tag != $t and .tag != "tuic-in"))')
-            updated_json=$(echo "$updated_json" | jq --argjson t "$in_t" '.inbounds += [$t]')
-            ;;
-          5)
-            if [ "$has_vless" = "true" ]; then
-              echo -e " vless-reality 模块: ${G}已安装${NC}"
-              continue
-            fi
-            echo -e " vless-reality 模块: ${Y}未安装，开始安装...${NC}"
-            read -r -p " 端口 (默认: 443): " v_port_in
-            local v_port=${v_port_in:-"443"}
-            while port_is_in_use "$updated_json" "${v_port}" ""; do
-              warn "端口 ${v_port} 已被其它入站占用，请更换端口。"
-              read -r -p " 端口: " v_port_in
-              v_port=${v_port_in}
-              [ -z "${v_port:-}" ] && v_port="443"
-            done
-            read -r -p " Private Key: " priv_key
-            read -r -p " Short ID: " sid
-            read -r -p " 目标域名 (默认: www.icloud.com): " sni
-            sni=${sni:-"www.icloud.com"}
-            local uuid; uuid=$(sing-box generate uuid)
-
-            local sid_json
-            if [ -z "${sid:-}" ]; then sid_json="[]"; else sid_json="[\"$sid\"]"; fi
-
-            local reality_tag="vless-reality-${v_port}-in"
-            local in_v
-            in_v=$(jq -n --arg uuid "$uuid" --arg name "$reality_tag" --arg priv "$priv_key" --argjson sid "$sid_json" --arg sni "$sni" --argjson port "$v_port" '{
-              "type":"vless",
-              "tag":$name,
+            local t_pass t_uuid t_tag in_t
+            t_pass=$(openssl rand -base64 12)
+            t_uuid=$(sing-box generate uuid)
+            t_tag="tuic-${t_port}-in"
+            in_t=$(jq -n --arg uuid "$t_uuid" --arg pass "$t_pass" --arg tag "$t_tag" --arg sni "$t_sni" --argjson port "$t_port" '{
+              "type":"tuic",
+              "tag":$tag,
               "listen":"::",
               "listen_port":$port,
-              "users":[{"name":$name,"uuid":$uuid,"flow":"xtls-rprx-vision"}],
-              "tls":{"enabled":true,"server_name":$sni,"reality":{"enabled":true,"handshake":{"server":$sni,"server_port":443},"private_key":$priv,"short_id":$sid}}
+              "users":[{"name":$tag,"uuid":$uuid,"password":$pass}],
+              "tls":{"enabled":true,"server_name":$sni},
+              "congestion_control":"bbr"
             }')
-            updated_json=$(echo "$updated_json" | jq --arg t "$reality_tag" '.inbounds |= map(select(.tag != $t and .tag != "vless-reality-in" and .tag != "vless-main-in"))')
-            updated_json=$(echo "$updated_json" | jq --argjson v "$in_v" '.inbounds += [$v]')
-            ;;
-          6)
-            local any_port_in any_port
-            while true; do
-              read -r -p " AnyTLS 端口 (默认: 443): " any_port_in
-              any_port=${any_port_in:-"443"}
-              local any_tag="anytls-${any_port}-in"
-              if echo "$updated_json" | jq -e --arg t "$any_tag" '.inbounds[]? | select(.tag==$t)' >/dev/null 2>&1; then
-                echo -e " anytls 模块: ${G}已安装${NC}（tag=${any_tag}），跳过。"
-                any_port=""
-                break
-              fi
-              if echo "$updated_json" | jq -e --arg p "$any_port" '.inbounds[]? | select((.listen_port? // empty | tostring) == $p) | select(.type != "anytls")' >/dev/null 2>&1; then
-                warn "端口 ${any_port} 已被其它协议占用，请更换端口。"
-                continue
-              fi
-              break
-            done
-            if [ -z "${any_port:-}" ]; then continue; fi
-            local any_p; any_p=$(openssl rand -base64 16)
-            ok "已生成 AnyTLS 随机密码。"
-            read -r -p " AnyTLS 域名 (默认: www.icloud.com): " any_sni_in
-            local any_sni=${any_sni_in:-"www.icloud.com"}
-            openssl req -x509 -newkey ec:<(openssl ecparam -name prime256v1) -keyout /etc/sing-box/anytls.key -out /etc/sing-box/anytls.crt -days 36500 -nodes -subj "/CN=${any_sni}" &> /dev/null || true
-            local any_tag="anytls-${any_port}-in"
-            local in_any
-            in_any=$(jq -n --arg tag "$any_tag" --arg p "$any_p" --arg sni "$any_sni" --argjson port "$any_port" '{
-              "type":"anytls","tag":$tag,"listen":"::","listen_port":$port,"users":[{"name":$tag,"password":$p}],"padding_scheme":[],"tls":{"enabled":true,"server_name":$sni,"certificate_path":"/etc/sing-box/anytls.crt","key_path":"/etc/sing-box/anytls.key","alpn":["h2","http/1.1"]}
-            }')
-            updated_json=$(echo "$updated_json" | jq --argjson a "$in_any" '.inbounds += [$a]')
+            updated_json=$(echo "$updated_json" | jq --arg t "$t_tag" '.inbounds |= map(select(.tag != $t))')
+            updated_json=$(echo "$updated_json" | jq --argjson x "$in_t" '.inbounds += [$x]')
             ;;
           *)
-            warn "未知选项：$c"
+            warn "忽略无效模块编号：$c"
             ;;
         esac
       done
@@ -985,25 +998,30 @@ sync_core_services() {
     fi
 
     if [[ "${act:-}" == "2" ]]; then
-      local installed_names=()
-      local installed_ids=()
-      if [ "$has_wstls" = "true" ]; then installed_ids+=("1"); installed_names+=("vless-ws-tls"); fi
-      if [ "$has_ws" = "true" ]; then installed_ids+=("2"); installed_names+=("vless-ws"); fi
-      if [ "$has_ss" = "true" ]; then installed_ids+=("3"); installed_names+=("shadowsocks"); fi
-      if [ "$has_tuic" = "true" ]; then installed_ids+=("4"); installed_names+=("tuic-v5"); fi
-      if [ "$has_vless" = "true" ]; then installed_ids+=("5"); installed_names+=("vless-reality"); fi
-      if [ "$has_anytls" = "true" ]; then installed_ids+=("6"); installed_names+=("anytls"); fi
+      local installed_ids=() installed_names=()
+      [ "$has_vless" = "true" ] && { installed_ids+=("1"); installed_names+=("vless-reality"); }
+      [ "$has_anytls" = "true" ] && { installed_ids+=("2"); installed_names+=("anytls"); }
+      [ "$has_ss" = "true" ] && { installed_ids+=("3"); installed_names+=("shadowsocks"); }
+      [ "$has_vmess_ws" = "true" ] && { installed_ids+=("4"); installed_names+=("vmess-ws"); }
+      [ "$has_vless_ws" = "true" ] && { installed_ids+=("5"); installed_names+=("vless-ws"); }
+      [ "$has_tuic" = "true" ] && { installed_ids+=("6"); installed_names+=("tuic-v5"); }
 
-      if [ ${#installed_ids[@]} -eq 0 ]; then
-        warn "暂无已安装的核心模块。"
+      if [ ${#installed_ids[@]} -eq 0 ] && [ "$has_legacy_wstls" != "true" ]; then
+        warn "当前没有可卸载的核心模块。"
         pause
         continue
       fi
 
-      echo -e "\n${R}已安装模块如下（多个用 + 连接，如 1+3）:${NC}"
+      echo -e "
+${R}已安装的核心模块如下（多个用 + 连接，如 1+2）:${NC}"
+      local i
       for i in "${!installed_ids[@]}"; do
-        echo -e "  [${installed_ids[$i]}] ${installed_names[$i]}"
+        echo -e " [${installed_ids[$i]}] ${installed_names[$i]}"
       done
+      if [ "$has_legacy_wstls" = "true" ] && [ "$has_vless_ws" != "true" ]; then
+        echo -e " [5] vless-ws ${Y}(兼容卸载旧版 vless-ws-tls)${NC}"
+      fi
+
       read -r -p " 请输入要卸载的模块编号: " sel
       local choices; choices="$(parse_plus "${sel:-}")"
       [ -z "${choices:-}" ] && { warn "未选择任何模块。"; pause; continue; }
@@ -1011,26 +1029,13 @@ sync_core_services() {
       local updated_json="$conf"
       for c in $choices; do
         case "$c" in
-          1) [ "$has_wstls" = "true" ] && { say "卸载 vless-wstls..."; updated_json=$(echo "$updated_json" | jq '.inbounds |= map(select((((.tag//"")|test("^vless-wstls-[0-9]+-in$")) or (.tag=="vless-ws-tls-in")) | not))'); } ;;
-          2) [ "$has_ws" = "true" ] && { say "卸载 vless-ws..."; updated_json=$(echo "$updated_json" | jq '.inbounds |= map(select((((.tag//"")|test("^vless-ws-[0-9]+-in$")) or (.tag=="vless-ws-in")) | not))'); } ;;
-          3)
-            if [ "$has_ss" = "true" ]; then
-              say "卸载 shadowsocks..."
-              local ss_list
-              ss_list=$(echo "$updated_json" | jq -r '.inbounds[]? | select((.tag // "") | startswith("ss-in")) | "\(.listen_port // 0)\t\(.tag // "")"' | sort -u)
-              if [ -n "${ss_list:-}" ]; then echo -e "\n${Y}当前 Shadowsocks 入站（端口\tTag）:${NC}"; echo "$ss_list" | sed 's/^/  - /'; fi
-              read -r -p " 请输入要卸载的 Shadowsocks 端口（回车/all=全部）: " ss_rm_port
-              if [ -z "${ss_rm_port:-}" ] || [ "${ss_rm_port:-}" = "all" ]; then
-                updated_json=$(echo "$updated_json" | jq '.inbounds |= map(select(((((.tag // "") | startswith("ss-in")) or ((.tag // "") | test("^ss-[0-9]+-in$"))) | not)))')
-              else
-                updated_json=$(echo "$updated_json" | jq --arg p "$ss_rm_port" '.inbounds |= map(if (.type=="shadowsocks" and ((.listen_port // 0 | tostring) == $p) and (((.tag // "") | startswith("ss-in")) or ((.tag // "") | test("^ss-[0-9]+-in$")))) then empty else . end)')
-              fi
-            fi
-            ;;
-          4) [ "$has_tuic" = "true" ] && { say "卸载 tuic-v5..."; updated_json=$(echo "$updated_json" | jq '.inbounds |= map(select((((.tag//"")|test("^tuic-[0-9]+-in$")) or (.tag=="tuic-in")) | not))'); } ;;
-          5) if [ "$has_vless" = "true" ]; then say "卸载 vless-reality..."; updated_json=$(echo "$updated_json" | jq '.inbounds |= map(select((((.tag//"")|test("^vless-reality-[0-9]+-in$")) or (.tag=="vless-reality-in") or (.tag=="vless-main-in")) | not))'); fi ;;
-          6) if [ "$has_anytls" = "true" ]; then say "卸载 anytls..."; updated_json=$(echo "$updated_json" | jq '.inbounds |= map(select((((.tag//"")|test("^anytls-[0-9]+-in$")) or (.type=="anytls")) | not))'); fi ;;
-          *) warn "未知选项：$c" ;;
+          1) [ "$has_vless" = "true" ] && { say "卸载 vless-reality..."; updated_json=$(echo "$updated_json" | jq '.inbounds |= map(select((((.tag//"")|test("^vless-reality-[0-9]+-in$")) or (.tag=="vless-reality-in") or (.tag=="vless-main-in")) | not))'); } ;;
+          2) [ "$has_anytls" = "true" ] && { say "卸载 anytls..."; updated_json=$(echo "$updated_json" | jq '.inbounds |= map(select((((.type=="anytls") or ((.tag//"")|test("^anytls-[0-9]+-in$"))) | not))'); } ;;
+          3) [ "$has_ss" = "true" ] && { say "卸载 shadowsocks..."; updated_json=$(echo "$updated_json" | jq '.inbounds |= map(select(((.type=="shadowsocks") | not)))'); } ;;
+          4) [ "$has_vmess_ws" = "true" ] && { say "卸载 vmess-ws..."; updated_json=$(echo "$updated_json" | jq '.inbounds |= map(select((((.tag//"")|test("^vmess-ws-[0-9]+-in$")) or (.tag=="vmess-ws-in")) | not))'); } ;;
+          5) { say "卸载 vless-ws（含旧版 vless-ws-tls 兼容清理）..."; updated_json=$(echo "$updated_json" | jq '.inbounds |= map(select((((.tag//"")|test("^vless-ws-[0-9]+-in$")) or (.tag=="vless-ws-in") or ((.tag//"")|test("^vless-wstls-[0-9]+-in$")) or (.tag=="vless-ws-tls-in")) | not))'); } ;;
+          6) [ "$has_tuic" = "true" ] && { say "卸载 tuic-v5..."; updated_json=$(echo "$updated_json" | jq '.inbounds |= map(select((((.tag//"")|test("^tuic-[0-9]+-in$")) or (.tag=="tuic-in")) | not))'); } ;;
+          *) warn "忽略无效模块编号：$c" ;;
         esac
       done
 
@@ -1038,130 +1043,6 @@ sync_core_services() {
       atomic_save "$updated_json" || true
       conf=$(cat "$CONFIG_FILE")
       pause
-      continue
-    fi
-    warn "无效输入：$act"
-    sleep 1
-  done
-}
-
-# ====================================================
-# 5) Relay nodes manager (install/uninstall)
-# ====================================================
-manage_relay_nodes() {
-  init_manager_env
-  local conf; conf=$(cat "$CONFIG_FILE")
-
-  while true; do
-    conf=$(cat "$CONFIG_FILE")
-    clear
-    echo -e "${B}┌──────────────────────────────────────────────────┐${NC}"
-    echo -e "${B}│                 中转节点管理 (Install/Uninstall)    │${NC}"
-    echo -e "${B}└──────────────────────────────────────────────────┘${NC}"
-
-    mapfile -t __relay_nodes < <(
-      echo "$conf" | jq -r '(.inbounds[]? | (.users? // []))[]? | .name // empty' 2>/dev/null \
-        | grep -E -- '(-to-|^relay-)' || true
-    )
-    if [ ${#__relay_nodes[@]} -eq 0 ]; then
-      echo -e "${Y}当前暂无中转节点。${NC}"
-    else
-      echo -e "${C}当前已配置中转节点:${NC} ${G}${#__relay_nodes[@]} 个${NC}"
-      for __n in "${__relay_nodes[@]}"; do
-        echo -e "  - ${G}${__n}${NC}"
-      done
-    fi
-
-    echo -e "  ${C}1.${NC} 安装/覆盖"
-    echo -e "  ${C}2.${NC} 卸载"
-    echo -e "  ${R}0.${NC} 返回主菜单"
-    echo -e "${B}────────────────────────────────────────────────────${NC}"
-    read -r -p " 请选择操作: " act
-    if [[ "${act:-}" == "0" ]]; then
-      return 0
-    fi
-
-    if [[ "${act:-}" == "1" ]]; then
-      add_relay_node
-      conf=$(cat "$CONFIG_FILE")
-      continue
-    fi
-
-    if [[ "${act:-}" == "2" ]]; then
-      conf=$(cat "$CONFIG_FILE")
-      mapfile -t nodes < <(
-        echo "$conf" | jq -r '(.inbounds[]? | (.users? // []))[]? | .name // empty' 2>/dev/null \
-          | grep -E -- '(-to-|^relay-)' || true
-      )
-
-      if [ ${#nodes[@]} -eq 0 ]; then
-        warn "暂无已配置的中转节点。"
-        pause
-        continue
-      fi
-
-      echo -e "\n${R}已配置的中转节点如下（多个用 + 连接，如 1+2）:${NC}"
-      for i in "${!nodes[@]}"; do
-        echo -e " [$(($i+1))] ${nodes[$i]}"
-      done
-
-      # helper parse 1+2
-      parse_plus() {
-        local s="$1"
-        local -A seen=()
-        local out=()
-        IFS='+' read -r -a parts <<< "$s"
-        for p in "${parts[@]}"; do
-          p="${p// /}"
-          [[ -z "$p" ]] && continue
-          if [[ "$p" =~ ^[0-9]+$ ]] && [ -z "${seen[$p]+x}" ]; then
-            seen[$p]=1
-            out+=("$p")
-          fi
-        done
-        echo "${out[@]}"
-      }
-
-      read -r -p " 请输入要卸载的编号: " sel
-      local choices; choices="$(parse_plus "${sel:-}")"
-      [ -z "${choices:-}" ] && { warn "未选择任何节点。"; pause; continue; }
-
-      local updated_json="$conf"
-
-      for c in $choices; do
-        if [[ "$c" =~ ^[0-9]+$ ]] && [ "$c" -ge 1 ] && [ "$c" -le "${#nodes[@]}" ]; then
-          local relay_user="${nodes[$(($c-1))]}"
-          local land="${relay_user##*-}"
-          local out="out-to-$land"
-
-          updated_json=$(echo "$updated_json" | jq --arg u "$relay_user" --arg o "$out" '
-            .inbounds |= map(
-              if (.users? != null) then
-                .users |= (map(select((.name? // "") != $u)))
-              else
-                .
-              end
-            )
-            | .outbounds |= map(select(.tag != $o))
-          ')
-          updated_json=$(remove_relay_rule_safely "$updated_json" "$relay_user")
-
-          # 额外兜底：删除所有指向该落地 outbound 的 route rule，避免“孤儿规则”残留
-
-          updated_json=$(echo "$updated_json" | jq --arg o "$out" '
-
-            .route.rules |= ((. // []) | map(select(((.outbound // "") != $o))))
-
-          ')
-else
-          warn "忽略无效编号：$c"
-        fi
-      done
-
-      updated_json=$(sync_managed_route_rules "$updated_json")
-      atomic_save "$updated_json" || true
-      pause
-      conf=$(cat "$CONFIG_FILE")
       continue
     fi
 
@@ -1170,6 +1051,7 @@ else
   done
 }
 
+
 # ====================================================
 # 5) Add/overwrite relay node
 # ====================================================
@@ -1177,149 +1059,128 @@ add_relay_node() {
   init_manager_env
   local conf; conf=$(cat "$CONFIG_FILE")
 
-  # 主入站选择：vless-reality / vless-wstls / ss / anytls
-  echo -e "\n${C}─── 添加/覆盖中转节点 ───${NC}"
+  echo -e "
+${C}─── 添加/覆盖中转节点 ───${NC}"
   echo -e " 主入站协议："
   echo -e "  ${C}1.${NC} vless-reality"
-  echo -e "  ${C}2.${NC} vless-wstls"
+  echo -e "  ${C}2.${NC} anytls"
   echo -e "  ${C}3.${NC} shadowsocks"
-  echo -e "  ${C}4.${NC} anytls"
+  echo -e "  ${C}4.${NC} vmess-ws"
+  echo -e "  ${C}5.${NC} vless-ws"
   while true; do
     read -r -p " 请选择: " in_choice
     case "${in_choice:-}" in
-      1|2|3|4) break ;;
-      *) warn "无效选择，请输入 1/2/3/4。" ;;
+      "") return 0 ;;
+      1|2|3|4|5) break ;;
+      *) warn "无效选择，请输入 1/2/3/4/5，或直接回车返回上一级。" ;;
     esac
   done
 
-  local relay_in_tag=""    # 实际配置中的 inbound.tag（可能是旧命名）
-  local relay_proto=""     # 用于命名：ss / vless-reality / vless-wstls
-  local relay_port="0"
+  local relay_in_tag="" relay_proto="" relay_port="0"
 
   case "$in_choice" in
     1)
-      # reality：优先新命名 vless-reality-<port>-in，否则兼容旧 vless-reality-in / vless-main-in
       relay_in_tag=$(echo "$conf" | jq -r '
         ( .inbounds[]? | select((.tag//"")|test("^vless-reality-[0-9]+-in$")) | .tag ) ,
         ( .inbounds[]? | select(.tag=="vless-reality-in") | .tag ) ,
         ( .inbounds[]? | select(.tag=="vless-main-in") | .tag )
       ' 2>/dev/null | head -n1)
-      if [ -z "${relay_in_tag:-}" ]; then
-        err "未检测到 vless-reality 入站。请先在选项4安装 vless-reality。"
-        pause
-        return 1
-      fi
+      [ -z "${relay_in_tag:-}" ] && { err "未检测到 vless-reality 入站。请先在选项4安装 vless-reality。"; pause; return 1; }
       relay_proto="vless-reality"
       ;;
     2)
-      relay_in_tag=$(echo "$conf" | jq -r '
-        ( .inbounds[]? | select((.tag//"")|test("^vless-wstls-[0-9]+-in$")) | .tag ) ,
-        ( .inbounds[]? | select(.tag=="vless-ws-tls-in") | .tag )
-      ' 2>/dev/null | head -n1)
-      if [ -z "${relay_in_tag:-}" ]; then
-        err "未检测到 vless-wstls 入站。请先在选项4安装 vless-wstls。"
-        pause
-        return 1
-      fi
-      relay_proto="vless-wstls"
-      ;;
-    3)
-      # SS 主入站：候选为 shadowsocks 且 tag 新命名 ss-<port>-in 或旧命名 ss-in*
-      local ss_candidates_json ss_count
-      ss_candidates_json=$(echo "$conf" | jq -c '
-        [.inbounds[]?
-          | select(.type=="shadowsocks")
-          | select(((.tag//"")|test("^ss-[0-9]+-in$")) or ((.tag//"")|startswith("ss-in")))
-          | {tag:(.tag//""), port:(.listen_port//0), method:(.method//"aes-128-gcm")}
-        ]' 2>/dev/null)
-      ss_count=$(echo "$ss_candidates_json" | jq -r 'length' 2>/dev/null || echo "0")
-      if [ "${ss_count:-0}" -le 0 ]; then
-        err "未检测到本机 SS 入站。请先在选项4创建 SS 节点。"
-        pause
-        return 1
-      fi
-      if [ "${ss_count:-0}" -eq 1 ]; then
-        relay_in_tag=$(echo "$ss_candidates_json" | jq -r '.[0].tag')
+      local any_candidates_json any_count
+      any_candidates_json=$(echo "$conf" | jq -c '[.inbounds[]? | select((.type=="anytls") or ((.tag//"")|test("^anytls-[0-9]+-in$"))) | {tag:(.tag//""), port:(.listen_port//0)}]' 2>/dev/null)
+      any_count=$(echo "$any_candidates_json" | jq -r 'length' 2>/dev/null || echo "0")
+      [ "${any_count:-0}" -le 0 ] && { err "未检测到 anytls 入站。请先在选项4安装 anytls。"; pause; return 1; }
+      if [ "${any_count:-0}" -eq 1 ]; then
+        relay_in_tag=$(echo "$any_candidates_json" | jq -r '.[0].tag')
       else
-        echo -e "\n${C}检测到多个 SS 入站端口，请选择一个作为中转主入站：${NC}"
+        echo -e "
+${C}检测到多个 AnyTLS 入站端口，请选择一个作为中转主入站：${NC}"
         local i
-        for i in $(seq 0 $((ss_count-1))); do
-          local t p mth
-          t=$(echo "$ss_candidates_json" | jq -r ".[$i].tag")
-          p=$(echo "$ss_candidates_json" | jq -r ".[$i].port")
-          mth=$(echo "$ss_candidates_json" | jq -r ".[$i].method")
-          echo -e "  [$(($i+1))] ${G}${t}${NC}  (port=${p}, method=${mth})"
+        for i in $(seq 0 $((any_count-1))); do
+          echo -e "  [$(($i+1))] $(echo "$any_candidates_json" | jq -r ".[$i].tag")  (port=$(echo "$any_candidates_json" | jq -r ".[$i].port"))"
         done
         local pick
         read -r -p " 请输入编号: " pick
-        if [[ ! "${pick:-}" =~ ^[0-9]+$ ]] || [ "$pick" -lt 1 ] || [ "$pick" -gt "$ss_count" ]; then
-          err "无效选择。"
-          pause
-          return 1
-        fi
+        if [[ ! "${pick:-}" =~ ^[0-9]+$ ]] || [ "$pick" -lt 1 ] || [ "$pick" -gt "$any_count" ]; then err "无效选择。"; pause; return 1; fi
+        relay_in_tag=$(echo "$any_candidates_json" | jq -r ".[$(($pick-1))].tag")
+      fi
+      relay_proto="anytls"
+      ;;
+    3)
+      local ss_candidates_json ss_count
+      ss_candidates_json=$(echo "$conf" | jq -c '[.inbounds[]? | select(.type=="shadowsocks") | select(((.tag//"")|test("^ss-[0-9]+-in$")) or ((.tag//"")|startswith("ss-in"))) | {tag:(.tag//""), port:(.listen_port//0), method:(.method//"aes-128-gcm")}]' 2>/dev/null)
+      ss_count=$(echo "$ss_candidates_json" | jq -r 'length' 2>/dev/null || echo "0")
+      [ "${ss_count:-0}" -le 0 ] && { err "未检测到本机 SS 入站。请先在选项4创建 SS 节点。"; pause; return 1; }
+      if [ "${ss_count:-0}" -eq 1 ]; then
+        relay_in_tag=$(echo "$ss_candidates_json" | jq -r '.[0].tag')
+      else
+        echo -e "
+${C}检测到多个 SS 入站端口，请选择一个作为中转主入站：${NC}"
+        local i
+        for i in $(seq 0 $((ss_count-1))); do
+          echo -e "  [$(($i+1))] $(echo "$ss_candidates_json" | jq -r ".[$i].tag")  (port=$(echo "$ss_candidates_json" | jq -r ".[$i].port"), method=$(echo "$ss_candidates_json" | jq -r ".[$i].method"))"
+        done
+        local pick
+        read -r -p " 请输入编号: " pick
+        if [[ ! "${pick:-}" =~ ^[0-9]+$ ]] || [ "$pick" -lt 1 ] || [ "$pick" -gt "$ss_count" ]; then err "无效选择。"; pause; return 1; fi
         relay_in_tag=$(echo "$ss_candidates_json" | jq -r ".[$(($pick-1))].tag")
       fi
       relay_proto="ss"
       ;;
     4)
-      # AnyTLS 主入站：候选为 anytls 且 tag 为 anytls-<port>-in
-      local any_candidates_json any_count
-      any_candidates_json=$(echo "$conf" | jq -c '
-        [.inbounds[]?
-          | select((.type=="anytls") or ((.tag//"")|test("^anytls-[0-9]+-in$")))
-          | {tag:(.tag//""), port:(.listen_port//0)}
-        ]' 2>/dev/null)
-      any_count=$(echo "$any_candidates_json" | jq -r 'length' 2>/dev/null || echo "0")
-      if [ "${any_count:-0}" -le 0 ]; then
-        err "未检测到 anytls 入站。请先在选项4安装 anytls。"
-        pause
-        return 1
-      fi
-      if [ "${any_count:-0}" -eq 1 ]; then
-        relay_in_tag=$(echo "$any_candidates_json" | jq -r '.[0].tag')
+      local vmess_candidates_json vmess_count
+      vmess_candidates_json=$(echo "$conf" | jq -c '[.inbounds[]? | select(((.tag//"")|test("^vmess-ws-[0-9]+-in$")) or (.tag=="vmess-ws-in")) | {tag:(.tag//""), port:(.listen_port//0), path:(.transport.path // "/")}]' 2>/dev/null)
+      vmess_count=$(echo "$vmess_candidates_json" | jq -r 'length' 2>/dev/null || echo "0")
+      [ "${vmess_count:-0}" -le 0 ] && { err "未检测到 vmess-ws 入站。请先在选项4安装 vmess-ws。"; pause; return 1; }
+      if [ "${vmess_count:-0}" -eq 1 ]; then
+        relay_in_tag=$(echo "$vmess_candidates_json" | jq -r '.[0].tag')
       else
-        echo -e "\n${C}检测到多个 AnyTLS 入站端口，请选择一个作为中转主入站：${NC}"
+        echo -e "
+${C}检测到多个 vmess-ws 入站端口，请选择一个作为中转主入站：${NC}"
         local i
-        for i in $(seq 0 $((any_count-1))); do
-          local t p
-          t=$(echo "$any_candidates_json" | jq -r ".[$i].tag")
-          p=$(echo "$any_candidates_json" | jq -r ".[$i].port")
-          echo -e "  [$(($i+1))] ${G}${t}${NC}  (port=${p})"
+        for i in $(seq 0 $((vmess_count-1))); do
+          echo -e "  [$(($i+1))] $(echo "$vmess_candidates_json" | jq -r ".[$i].tag")  (port=$(echo "$vmess_candidates_json" | jq -r ".[$i].port"), path=$(echo "$vmess_candidates_json" | jq -r ".[$i].path"))"
         done
         local pick
         read -r -p " 请输入编号: " pick
-        if [[ ! "${pick:-}" =~ ^[0-9]+$ ]] || [ "$pick" -lt 1 ] || [ "$pick" -gt "$any_count" ]; then
-          err "无效选择。"
-          pause
-          return 1
-        fi
-        relay_in_tag=$(echo "$any_candidates_json" | jq -r ".[$(($pick-1))].tag")
+        if [[ ! "${pick:-}" =~ ^[0-9]+$ ]] || [ "$pick" -lt 1 ] || [ "$pick" -gt "$vmess_count" ]; then err "无效选择。"; pause; return 1; fi
+        relay_in_tag=$(echo "$vmess_candidates_json" | jq -r ".[$(($pick-1))].tag")
       fi
-      relay_proto="anytls"
+      relay_proto="vmess-ws"
       ;;
-    *)
-      warn "无效选择，已默认使用 vless-reality。"
-      relay_in_tag=$(echo "$conf" | jq -r '
-        ( .inbounds[]? | select((.tag//"")|test("^vless-reality-[0-9]+-in$")) | .tag ) ,
-        ( .inbounds[]? | select(.tag=="vless-reality-in") | .tag ) ,
-        ( .inbounds[]? | select(.tag=="vless-main-in") | .tag )
-      ' 2>/dev/null | head -n1)
-      if [ -z "${relay_in_tag:-}" ]; then
-        err "未检测到 vless-reality 入站。请先在选项4安装 vless-reality。"
-        pause
-        return 1
+    5)
+      local ws_candidates_json ws_count
+      ws_candidates_json=$(echo "$conf" | jq -c '[.inbounds[]? | select(((.tag//"")|test("^vless-ws-[0-9]+-in$")) or (.tag=="vless-ws-in")) | {tag:(.tag//""), port:(.listen_port//0), path:(.transport.path // "/")}]' 2>/dev/null)
+      ws_count=$(echo "$ws_candidates_json" | jq -r 'length' 2>/dev/null || echo "0")
+      [ "${ws_count:-0}" -le 0 ] && { err "未检测到 vless-ws 入站。请先在选项4安装 vless-ws。"; pause; return 1; }
+      if [ "${ws_count:-0}" -eq 1 ]; then
+        relay_in_tag=$(echo "$ws_candidates_json" | jq -r '.[0].tag')
+      else
+        echo -e "
+${C}检测到多个 vless-ws 入站端口，请选择一个作为中转主入站：${NC}"
+        local i
+        for i in $(seq 0 $((ws_count-1))); do
+          echo -e "  [$(($i+1))] $(echo "$ws_candidates_json" | jq -r ".[$i].tag")  (port=$(echo "$ws_candidates_json" | jq -r ".[$i].port"), path=$(echo "$ws_candidates_json" | jq -r ".[$i].path"))"
+        done
+        local pick
+        read -r -p " 请输入编号: " pick
+        if [[ ! "${pick:-}" =~ ^[0-9]+$ ]] || [ "$pick" -lt 1 ] || [ "$pick" -gt "$ws_count" ]; then err "无效选择。"; pause; return 1; fi
+        relay_in_tag=$(echo "$ws_candidates_json" | jq -r ".[$(($pick-1))].tag")
       fi
-      relay_proto="vless-reality"
+      relay_proto="vless-ws"
       ;;
   esac
 
   relay_port=$(echo "$conf" | jq -r --arg tag "$relay_in_tag" '.inbounds[]? | select(.tag==$tag) | .listen_port // empty' 2>/dev/null | head -n1)
   [ -z "${relay_port:-}" ] && relay_port="0"
 
-  echo -e "\n${C}─── 添加/覆盖中转节点 ───${NC}"
+  echo -e "
+${C}─── 添加/覆盖中转节点 ───${NC}"
   read -r -p " 落地标识 (如 sg01): " land; [ -z "${land:-}" ] && return 1
   read -r -p " 落地 IP 地址: " ip; [ -z "${ip:-}" ] && return 1
-    # SS 2022：允许输入 server 或 server:user（均为 Base64），回车随机生成（与 sing-box 文档一致）
   read -r -p " 落地 SS 2022 密钥（回车随机生成）: " pw
   if [ -z "${pw:-}" ]; then
     local pw_server pw_user
@@ -1331,14 +1192,11 @@ add_relay_node() {
     local pw_server pw_user
     pw_server="${pw%%:*}"
     pw_user=""
-    if [[ "$pw" == *:* ]]; then
-      pw_user="${pw#*:}"
-    fi    # 校验并按需生成
+    if [[ "$pw" == *:* ]]; then pw_user="${pw#*:}"; fi
     if ! echo "$pw_server" | base64 -d >/dev/null 2>&1; then
       warn "server 密钥不是合法 Base64，已为你生成新的 server Base64 密钥。"
       pw_server=$(openssl rand -base64 16)
     fi
-
     if [ -n "${pw_user:-}" ]; then
       if ! echo "$pw_user" | base64 -d >/dev/null 2>&1; then
         warn "user 密钥不是合法 Base64，已为你生成新的 user Base64 密钥。"
@@ -1346,20 +1204,16 @@ add_relay_node() {
       fi
       pw="${pw_server}:${pw_user}"
     else
-      # 未提供 user，则按单用户 server key 使用
       pw="${pw_server}"
     fi
   fi
 
   local land_id="$land"
-
-  local user out
+  local user out uuid new_u new_o updated_json
   user="${relay_proto}-${relay_port}-to-${land_id}"
   out="out-to-${land_id}"
-  local uuid; uuid=$(sing-box generate uuid)
+  uuid=$(sing-box generate uuid)
 
-  # 构造 relay user object：VLESS 用 uuid；SS relay 用 password（专用随机密码）
-  local new_u
   if [ "$relay_proto" = "ss" ]; then
     local relay_ss_pass
     relay_ss_pass=$(openssl rand -base64 16)
@@ -1370,47 +1224,67 @@ add_relay_node() {
     local relay_any_pass
     relay_any_pass=$(openssl rand -base64 16)
     new_u=$(jq -n --arg name "$user" --arg pass "$relay_any_pass" '{"name":$name,"password":$pass}')
+  elif [ "$relay_proto" = "vmess-ws" ]; then
+    new_u=$(jq -n --arg name "$user" --arg uuid "$uuid" '{"name":$name,"uuid":$uuid,"alterId":0}')
   else
     new_u=$(jq -n --arg name "$user" --arg uuid "$uuid" '{"name":$name,"uuid":$uuid}')
   fi
 
-  local new_o
   new_o=$(jq -n --arg tag "$out" --arg addr "$ip" --arg key "$pw" '{
-    "type":"shadowsocks",
-    "tag":$tag,
-    "server":$addr,
-    "server_port":8080,
-    "method":"2022-blake3-aes-128-gcm",
-    "password":$key,
-    "multiplex":{"enabled":true}
+    "type":"shadowsocks","tag":$tag,"server":$addr,"server_port":8080,
+    "method":"2022-blake3-aes-128-gcm","password":$key,"multiplex":{"enabled":true}
   }')
 
-  # 从所有 inbounds 的 users 里移除同名 relay user，避免重复
-  local updated_json
   updated_json=$(echo "$conf" | jq --arg user "$user" '(.inbounds[]? | select(.users?!=null).users) |= (map(select((.name? // "") != $user)))')
-
-  # 覆盖 outbounds
   updated_json=$(echo "$updated_json" | jq --arg out "$out" '.outbounds |= map(select(.tag != $out))')
-
-  # 移除旧 relay route rule(s)
   updated_json=$(remove_relay_rule_safely "$updated_json" "$user")
-
-  # 把 relay user 挂到选定主入站
-  updated_json=$(echo "$updated_json" | jq --argjson u "$new_u" --arg relayTag "$relay_in_tag" '
-    (.inbounds[] | select(.tag == $relayTag).users) += [$u]
-  ')
-
-  # 添加落地 outbound
+  updated_json=$(echo "$updated_json" | jq --argjson u "$new_u" --arg relayTag "$relay_in_tag" '(.inbounds[] | select(.tag == $relayTag).users) += [$u]')
   updated_json=$(echo "$updated_json" | jq --argjson o "$new_o" '.outbounds += [$o]')
-
-  # 添加 relay route rule（放在最前）
   local new_r
   new_r=$(jq -n --arg user "$user" --arg out "$out" '{"auth_user":[$user],"outbound":$out}')
   updated_json=$(echo "$updated_json" | jq --argjson r "$new_r" 'if type=="array" then {"log":{"level":"info","timestamp":true},"inbounds":.,"outbounds":[{"type":"direct","tag":"direct"}],"route":{"rules":[]}} else . end | .inbounds=(.inbounds//[]) | .outbounds=(.outbounds//[]) | .route=(.route//{"rules":[]}) | .route.rules=(.route.rules//[]) | .route.rules = [$r] + (.route.rules // [])')
-
   updated_json=$(sync_managed_route_rules "$updated_json")
   atomic_save "$updated_json"
 }
+
+
+manage_relay_nodes() {
+  while true; do
+    clear
+    local conf
+    conf=$(cat "$CONFIG_FILE" 2>/dev/null || echo '{}')
+
+    echo -e "\n${C}─── 中转节点管理 ───${NC}"
+
+    mapfile -t __relay_nodes < <(
+      echo "$conf" | jq -r '(.inbounds[]? | (.users? // []))[]? | .name // empty' 2>/dev/null \
+        | grep -E -- '(-to-|^relay-)' | sort -u || true
+    )
+    if [ ${#__relay_nodes[@]} -eq 0 ]; then
+      echo -e " ${Y}当前未安装中转节点。${NC}"
+    else
+      echo -e " ${C}当前已安装中转节点：${NC}"
+      local __n
+      for __n in "${__relay_nodes[@]}"; do
+        echo -e "   - ${G}${__n}${NC}"
+      done
+    fi
+
+    echo
+    echo -e "  ${C}1.${NC} 添加/覆盖"
+    echo -e "  ${C}2.${NC} 删除"
+    echo -e "  ${R}0.${NC} 返回主菜单"
+    echo -e "${B}────────────────────────────────────────────────────${NC}"
+    read -r -p " 请选择操作: " act
+    case "${act:-}" in
+      1) add_relay_node || true ;;
+      2) del_relay_node || true ;;
+      0|q|Q|"") return 0 ;;
+      *) warn "无效输入：$act"; sleep 1 ;;
+    esac
+  done
+}
+
 
 # ====================================================
 # 6) Delete relay node
@@ -1421,38 +1295,61 @@ del_relay_node() {
 
   mapfile -t nodes < <(
     echo "$conf" | jq -r '(.inbounds[]? | (.users? // []))[]? | .name // empty' 2>/dev/null \
-      | grep -E -- '(-to-|^relay-)' || true
+      | grep -E -- '(-to-|^relay-)' | sort -u || true
   )
 
   if [ ${#nodes[@]} -eq 0 ]; then
     warn "暂无已配置的中转节点。"
     pause
-    return
+    return 0
   fi
 
   echo -e "\n${R}─── 删除中转节点 ───${NC}"
   for i in "${!nodes[@]}"; do
     echo -e " [$(($i+1))] ${nodes[$i]}"
   done
-  read -r -p " 请输入要删除的编号: " choice
+  read -r -p " 请输入要删除的编号（支持 1+2+3，回车返回）: " choice
+  [ -z "${choice:-}" ] && return 0
 
-  if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#nodes[@]}" ]; then
-    local relay_user="${nodes[$(($choice-1))]}"
+  if ! [[ "$choice" =~ ^[0-9]+([+][0-9]+)*$ ]]; then
+    err "输入格式无效。"
+    pause
+    return 1
+  fi
+
+  local -a picks=()
+  local part
+  IFS='+' read -r -a picks <<< "$choice"
+
+  local updated_json="$conf"
+  local seen=" "
+  for part in "${picks[@]}"; do
+    if ! [[ "$part" =~ ^[0-9]+$ ]] || [ "$part" -lt 1 ] || [ "$part" -gt "${#nodes[@]}" ]; then
+      err "编号 ${part} 超出范围。"
+      pause
+      return 1
+    fi
+    case "$seen" in
+      *" $part "*) continue ;;
+      *) seen="${seen}${part} " ;;
+    esac
+
+    local relay_user="${nodes[$(($part-1))]}"
     local land="${relay_user##*-}"
     local out="out-to-$land"
 
-    local updated_json
-    updated_json=$(echo "$conf" | jq --arg u "$relay_user" --arg o "$out" '
+    updated_json=$(echo "$updated_json" | jq --arg u "$relay_user" --arg o "$out" '
       (.inbounds[]? | select(.users? != null).users) |= (map(select((.name? // "") != $u)))
       | .outbounds |= map(select((.tag // "") != $o))
     ')
 
     updated_json=$(remove_relay_rule_safely "$updated_json" "$relay_user")
-    updated_json=$(sync_managed_route_rules "$updated_json")
-    atomic_save "$updated_json"
-  fi
+  done
 
+  updated_json=$(sync_managed_route_rules "$updated_json")
+  atomic_save "$updated_json"
   pause
+  return 0
 }
 
 # ====================================================
@@ -1463,69 +1360,103 @@ export_configs() {
   clear
   local conf; conf=$(cat "$CONFIG_FILE")
   local ip; ip=$(get_public_ip)
-  local host; host=$(hostname)
 
-  echo -e "\n${C}─── 节点配置导出 ───${NC}"
+  echo -e "
+${C}─── 节点配置导出 ───${NC}"
 
-  # Helper: normalize legacy inbound tag -> new core tag "<proto>-<port>-in"
   norm_core_tag() { # $1 inbound_tag, $2 listen_port
     local t="$1"; local p="$2"
     case "$t" in
       vless-main-in|vless-reality-in) echo "vless-reality-${p}-in" ;;
-      vless-ws-tls-in)               echo "vless-wstls-${p}-in" ;;
-      vless-ws-in)                   echo "vless-ws-${p}-in" ;;
-      tuic-in)                       echo "tuic-${p}-in" ;;
-      ss-in|ss-in-*)                 echo "ss-${p}-in" ;;
-      *)
-        # already new style? return as-is
-        echo "$t"
-        ;;
+      vless-ws-tls-in|vless-wstls-${p}-in) echo "vless-ws-tls-${p}-in" ;;
+      vless-ws-in|vless-ws-${p}-in) echo "vless-ws-tls-${p}-in" ;;
+      vmess-ws-in|vmess-ws-${p}-in) echo "vmess-ws-tls-${p}-in" ;;
+      tuic-in|tuic-${p}-in) echo "tuic-${p}-in" ;;
+      ss-in|ss-in-*|ss-${p}-in) echo "ss-${p}-in" ;;
+      *) echo "$t" ;;
     esac
   }
 
-  # For Reality export: ask public key if any reality inbound exists (legacy or new)
   local v_pbk="PUBLIC_KEY_MISSING"
   if echo "$conf" | jq -e '.inbounds[]? | select(((.tag//"")|test("^vless-reality-[0-9]+-in$")) or (.tag=="vless-reality-in") or (.tag=="vless-main-in"))' >/dev/null 2>&1; then
     read -r -p " 请输入 Reality Public Key (默认: PUBLIC_KEY_MISSING): " v_pbk_in
     v_pbk=${v_pbk_in:-"PUBLIC_KEY_MISSING"}
   fi
 
-  # For WSTLS export: ask domain if any wstls inbound exists (legacy or new)
-  local wstls_domain="example.com"
-  if echo "$conf" | jq -e '.inbounds[]? | select(((.tag//"")|test("^vless-wstls-[0-9]+-in$")) or (.tag=="vless-ws-tls-in"))' >/dev/null 2>&1; then
-    read -r -p " 请输入 vless-wstls 域名 (SNI/Host，默认: example.com): " wstls_domain_in
-    wstls_domain=${wstls_domain_in:-"example.com"}
+  local ws_tls_domain="example.com"
+  if echo "$conf" | jq -e '.inbounds[]? | select(((.tag//"")|test("^vless-wstls-[0-9]+-in$")) or (.tag=="vless-ws-tls-in") or ((.tag//"")|test("^vless-ws-[0-9]+-in$")) or (.tag=="vless-ws-in"))' >/dev/null 2>&1; then
+    read -r -p " 请输入 vless-ws-tls 域名 (SNI/Host，默认: example.com): " ws_tls_domain_in
+    ws_tls_domain=${ws_tls_domain_in:-"example.com"}
   fi
-  local wstls_public_port=443
+  local ws_tls_public_port=443
 
-  # -------- vless-wstls direct --------
-  if echo "$conf" | jq -e '.inbounds[]? | select(((.tag//"")|test("^vless-wstls-[0-9]+-in$")) or (.tag=="vless-ws-tls-in"))' >/dev/null 2>&1; then
-    local in_tag in_port tag uuid path
-    in_tag=$(echo "$conf" | jq -r '.inbounds[]? | select(((.tag//"")|test("^vless-wstls-[0-9]+-in$")) or (.tag=="vless-ws-tls-in")) | .tag' | head -n1)
-    in_port=$(echo "$conf" | jq -r --arg t "$in_tag" '.inbounds[]? | select(.tag==$t) | .listen_port' | head -n1)
-    tag=$(norm_core_tag "$in_tag" "$in_port")
-    uuid=$(echo "$conf" | jq -r --arg t "$in_tag" '.inbounds[] | select(.tag==$t) | .users[0].uuid' | head -n1)
-    path=$(echo "$conf" | jq -r --arg t "$in_tag" '.inbounds[] | select(.tag==$t) | .transport.path // "/Akaman"' | head -n1)
+  local vmess_ws_domain="example.com"
+  if echo "$conf" | jq -e '.inbounds[]? | select(((.tag//"")|test("^vmess-ws-[0-9]+-in$")) or (.tag=="vmess-ws-in"))' >/dev/null 2>&1; then
+    read -r -p " 请输入 vmess-ws-tls 域名 (SNI/Host，默认: example.com): " vmess_ws_domain_in
+    vmess_ws_domain=${vmess_ws_domain_in:-"example.com"}
+  fi
+  local vmess_ws_public_port=443
 
-    echo -e "\n${W}[${tag}]${NC}"
-    echo -e " Clash: - {name: ${tag}, type: vless, server: $ip, port: ${wstls_public_port}, uuid: ${uuid}, udp: true, tls: true, network: ws, servername: ${wstls_domain}, ws-opts: {path: \"${path}\", headers: {Host: ${wstls_domain}}, max-early-data: 2048, early-data-header-name: Sec-WebSocket-Protocol}}"
-    echo ""
-    echo -e " Quantumult X: vless=$ip:${wstls_public_port},method=none,password=${uuid},obfs=wss,obfs-host=${wstls_domain},obfs-uri=${path}?ed=2048,fast-open=false,udp-relay=true,tag=${tag}"
+  # -------- vless-ws-tls direct + relay (兼容旧版 vless-wstls + 新版 vless-ws) --------
+  if echo "$conf" | jq -e '.inbounds[]? | select(((.tag//"")|test("^vless-wstls-[0-9]+-in$")) or (.tag=="vless-ws-tls-in") or ((.tag//"")|test("^vless-ws-[0-9]+-in$")) or (.tag=="vless-ws-in"))' >/dev/null 2>&1; then
+    echo "$conf" | jq -c '
+      .inbounds[]?
+      | select(((.tag//"")|test("^vless-wstls-[0-9]+-in$")) or (.tag=="vless-ws-tls-in") or ((.tag//"")|test("^vless-ws-[0-9]+-in$")) or (.tag=="vless-ws-in"))
+      | {tag:(.tag//""), port:(.listen_port//0), path:(.transport.path // "/"), users:(.users // [])}
+    ' | while read -r inbound; do
+      local in_tag in_port core_tag path
+      in_tag=$(echo "$inbound" | jq -r '.tag')
+      in_port=$(echo "$inbound" | jq -r '.port')
+      core_tag=$(norm_core_tag "$in_tag" "$in_port")
+      path=$(echo "$inbound" | jq -r '.path')
+      echo "$inbound" | jq -c '.users[]?' | while read -r u; do
+        local uname uuid out_tag
+        uname=$(echo "$u" | jq -r '.name // empty')
+        uuid=$(echo "$u" | jq -r '.uuid // empty')
+        [ -z "${uuid:-}" ] && continue
+        if [ "${uname:-}" = "${in_tag:-}" ] || [ "${uname:-}" = "${core_tag:-}" ] || [ "${uname:-}" = "vless-ws-tls-in" ] || [ "${uname:-}" = "vless-ws-in" ]; then
+          out_tag="${core_tag}"
+        else
+          out_tag="${uname}"
+        fi
+        echo -e "\n${W}[${out_tag}]${NC}"
+        echo -e " Clash: - {name: ${out_tag}, type: vless, server: $ip, port: ${ws_tls_public_port}, uuid: ${uuid}, udp: true, tls: true, network: ws, servername: ${ws_tls_domain}, ws-opts: {path: \"${path}\", headers: {Host: ${ws_tls_domain}, max-early-data: 2048, early-data-header-name: Sec-WebSocket-Protocol}}}"
+        echo ""
+        echo -e " Quantumult X: vless=$ip:${ws_tls_public_port},method=none,password=${uuid},obfs=wss,obfs-host=${ws_tls_domain},obfs-uri=${path}?ed=2048,fast-open=false,udp-relay=true,tag=${out_tag}"
+      done
+    done
   fi
 
-  # -------- vless-ws direct --------
-  if echo "$conf" | jq -e '.inbounds[]? | select(((.tag//"")|test("^vless-ws-[0-9]+-in$")) or (.tag=="vless-ws-in"))' >/dev/null 2>&1; then
-    local in_tag in_port tag uuid path
-    in_tag=$(echo "$conf" | jq -r '.inbounds[]? | select(((.tag//"")|test("^vless-ws-[0-9]+-in$")) or (.tag=="vless-ws-in")) | .tag' | head -n1)
-    in_port=$(echo "$conf" | jq -r --arg t "$in_tag" '.inbounds[]? | select(.tag==$t) | .listen_port' | head -n1)
-    tag=$(norm_core_tag "$in_tag" "$in_port")
-    uuid=$(echo "$conf" | jq -r --arg t "$in_tag" '.inbounds[] | select(.tag==$t) | .users[0].uuid' | head -n1)
-    path=$(echo "$conf" | jq -r --arg t "$in_tag" '.inbounds[] | select(.tag==$t) | .transport.path // "/Akaman"' | head -n1)
-
-    echo -e "\n${W}[${tag}]${NC}"
-    echo -e " Clash: - {name: ${tag}, type: vless, server: $ip, port: ${in_port}, uuid: ${uuid}, udp: true, tls: false, network: ws, ws-opts: {path: \"${path}?ed=2048\"}}"
-    echo ""
-    echo -e " Quantumult X: vless=$ip:${in_port},method=none,password=${uuid},obfs=ws,obfs-uri=${path}?ed=2048,fast-open=false,udp-relay=true,tag=${tag}"
+  # -------- vmess-ws-tls direct + relay --------
+  if echo "$conf" | jq -e '.inbounds[]? | select(((.tag//"")|test("^vmess-ws-[0-9]+-in$")) or (.tag=="vmess-ws-in"))' >/dev/null 2>&1; then
+    echo "$conf" | jq -c '
+      .inbounds[]?
+      | select(((.tag//"")|test("^vmess-ws-[0-9]+-in$")) or (.tag=="vmess-ws-in"))
+      | {tag:(.tag//""), port:(.listen_port//0), path:(.transport.path // "/"), users:(.users // [])}
+    ' | while read -r inbound; do
+      local in_tag in_port core_tag path
+      in_tag=$(echo "$inbound" | jq -r '.tag')
+      in_port=$(echo "$inbound" | jq -r '.port')
+      core_tag=$(norm_core_tag "$in_tag" "$in_port")
+      path=$(echo "$inbound" | jq -r '.path')
+      echo "$inbound" | jq -c '.users[]?' | while read -r u; do
+        local uname uuid out_tag
+        uname=$(echo "$u" | jq -r '.name // empty')
+        uuid=$(echo "$u" | jq -r '.uuid // empty')
+        [ -z "${uuid:-}" ] && continue
+        if [ "${uname:-}" = "${in_tag:-}" ] || [ "${uname:-}" = "${core_tag:-}" ] || [ "${uname:-}" = "vmess-ws-in" ]; then
+          out_tag="${core_tag}"
+        else
+          out_tag="${uname}"
+        fi
+        echo -e "\n${W}[${out_tag}]${NC}"
+        echo -e " Clash: - {name: ${out_tag}, type: vmess, server: $ip, port: ${vmess_ws_public_port}, uuid: ${uuid}, alterId: 0, cipher: auto, udp: true, tls: true, network: ws, servername: ${vmess_ws_domain}, ws-opts: {path: \"${path}\", headers: {Host: ${vmess_ws_domain}, max-early-data: 2048, early-data-header-name: Sec-WebSocket-Protocol}}}"
+        echo ""
+        echo -e " Quantumult X: vmess=$ip:${vmess_ws_public_port}, method=chacha20-poly1305, password=${uuid}, obfs=wss, obfs-host=${vmess_ws_domain}, obfs-uri=${path}?ed=2048, fast-open=false, udp-relay=true, tag=${out_tag}"
+        echo ""
+        echo -e " Surge: ${out_tag} = vmess, ${ip}, ${vmess_ws_public_port}, username=${uuid}, tls=true, vmess-aead=true, ws=true, ws-path=${path}?ed=2048, sni=${vmess_ws_domain}, ws-headers=Host:${vmess_ws_domain}, skip-cert-verify=false, udp-relay=true, tfo=false"
+      done
+    done
   fi
 
   # -------- tuic direct --------
@@ -1538,13 +1469,13 @@ export_configs() {
     pass=$(echo "$conf" | jq -r --arg t "$in_tag" '.inbounds[] | select(.tag==$t) | .users[0].password' | head -n1)
     sni=$(echo "$conf" | jq -r --arg t "$in_tag" '.inbounds[] | select(.tag==$t) | .tls.server_name // "www.icloud.com"' | head -n1)
 
-    echo -e "\n${W}[${tag}]${NC}"
+    echo -e "
+${W}[${tag}]${NC}"
     echo -e " Clash: - {name: ${tag}, type: tuic, server: $ip, port: $in_port, uuid: $uuid, password: $pass, alpn: [h3], disable-sni: false, reduce-rtt: false, udp-relay-mode: native, congestion-controller: bbr, skip-cert-verify: true, sni: $sni}"
-     echo ""
-     echo -e " Surge: tuic-v5 = tuic-v5, ${ip}, ${in_port}, password=${pass}, sni=${sni}, uuid=${uuid}, alpn=h3, ecn=true"
+    echo ""
+    echo -e " Surge: tuic-v5 = tuic-v5, ${ip}, ${in_port}, password=${pass}, sni=${sni}, uuid=${uuid}, alpn=h3, ecn=true"
   fi
 
-  
   # -------- anytls direct --------
   if echo "$conf" | jq -e '.inbounds[]? | select((.type=="anytls") or ((.tag//"")|test("^anytls-[0-9]+-in$")))' >/dev/null 2>&1; then
     echo "$conf" | jq -c '
@@ -1557,26 +1488,22 @@ export_configs() {
       in_port=$(echo "$inbound" | jq -r '.port')
       sni=$(echo "$inbound" | jq -r '.sni')
       tag="anytls-${in_port}-in"
-
       echo "$inbound" | jq -c '.users[]?' | while read -r u; do
         local pass uname
         uname=$(echo "$u" | jq -r '.name // "'"$tag"'"')
         pass=$(echo "$u" | jq -r '.password // empty')
         [ -z "${pass:-}" ] && continue
-        # 只导出核心 AnyTLS 用户（name 必须等于 tag），避免与中转(to)导出重复
-        if [ "${uname:-}" != "${tag:-}" ]; then
-          continue
-        fi
-
-        echo -e "\n${W}[${uname}]${NC}"
-        echo -e " Clash: - {name: ${uname}, type: anytls, server: $ip, port: ${in_port}, password: \"${pass}\", client-fingerprint: chrome, udp: true, sni: \"${sni}\", alpn: [h2, http/1.1], skip-cert-verify: true}"
+        if [ "${uname:-}" != "${tag:-}" ]; then continue; fi
+        echo -e "
+${W}[${uname}]${NC}"
+        echo -e " Clash: - {name: ${uname}, type: anytls, server: $ip, port: ${in_port}, password: "${pass}", client-fingerprint: chrome, udp: true, sni: "${sni}", alpn: [h2, http/1.1], skip-cert-verify: true}"
         echo ""
         echo -e " Surge: ${uname} = anytls, ${ip}, ${in_port}, password=${pass}, skip-cert-verify=true, sni=${sni}"
       done
     done
   fi
 
-# -------- vless-reality direct --------
+  # -------- vless-reality direct --------
   if echo "$conf" | jq -e '.inbounds[]? | select(((.tag//"")|test("^vless-reality-[0-9]+-in$")) or (.tag=="vless-reality-in") or (.tag=="vless-main-in"))' >/dev/null 2>&1; then
     local in_tag in_port tag uuid sni sid
     in_tag=$(echo "$conf" | jq -r '
@@ -1589,8 +1516,8 @@ export_configs() {
     uuid=$(echo "$conf" | jq -r --arg t "$in_tag" '.inbounds[]? | select(.tag==$t) | .users[0].uuid' | head -n1)
     sni=$(echo "$conf" | jq -r --arg t "$in_tag" '.inbounds[]? | select(.tag==$t) | .tls.server_name // "www.icloud.com"' | head -n1)
     sid=$(echo "$conf" | jq -r --arg t "$in_tag" '.inbounds[]? | select(.tag==$t) | .tls.reality.short_id[0] // ""' | head -n1)
-
-    echo -e "\n${W}[${tag}]${NC}"
+    echo -e "
+${W}[${tag}]${NC}"
     echo -e " Clash: - {name: ${tag}, type: vless, server: $ip, port: $in_port, uuid: $uuid, network: tcp, udp: true, tls: true, flow: xtls-rprx-vision, servername: $sni, reality-opts: {public-key: $v_pbk, short-id: '$sid'}, client-fingerprint: chrome}"
     echo ""
     echo -e " Quantumult X: vless=$ip:$in_port, method=none, password=$uuid, obfs=over-tls, obfs-host=$sni, reality-base64-pubkey=$v_pbk, reality-hex-shortid=$sid, vless-flow=xtls-rprx-vision, tag=${tag}"
@@ -1598,7 +1525,6 @@ export_configs() {
 
   # -------- shadowsocks direct (core only) --------
   if echo "$conf" | jq -e '.inbounds[]? | select(.type=="shadowsocks") | select(((.tag//"")|test("^ss-[0-9]+-in$")) or ((.tag//"")|startswith("ss-in")))' >/dev/null 2>&1; then
-    # export per inbound port; each port should export ONE core user as tag
     echo "$conf" | jq -c '
       .inbounds[]?
       | select(.type=="shadowsocks")
@@ -1610,171 +1536,17 @@ export_configs() {
       in_port=$(echo "$inbound" | jq -r '.port')
       method=$(echo "$inbound" | jq -r '.method')
       tag=$(norm_core_tag "$in_tag" "$in_port")
-       sp=$(echo "$inbound" | jq -r '.sp // ""')
-
-      # try find matching user.password: prefer user.name==tag, else first
-      pass=$(echo "$inbound" | jq -r --arg name "$tag" '
-        (.users // []) as $u
-        | ( ($u | map(select(.name==$name)))[0].password // ($u[0].password // empty) )
-      ')
+      sp=$(echo "$inbound" | jq -r '.sp // ""')
+      pass=$(echo "$inbound" | jq -r --arg name "$tag" '(.users // []) as $u | ((($u | map(select(.name==$name)))[0].password) // ($u[0].password // empty))')
       [ -z "${pass:-}" ] && continue
-       if [ -n "${sp:-}" ] && [ "${sp}" != "null" ]; then
-         pw_out="${sp}:${pass}"
-       else
-         pw_out="${pass}"
-       fi
-
-       echo -e "
+      if [ -n "${sp:-}" ] && [ "${sp}" != "null" ]; then pw_out="${sp}:${pass}"; else pw_out="${pass}"; fi
+      echo -e "
 ${W}[${tag}]${NC}"
-      echo -e " Clash: - {name: \"${tag}\", type: ss, server: $ip, port: ${in_port}, cipher: ${method}, password: \"${pw_out}\", udp: true, smux: {enabled: true}}"
-       echo ""
-       echo -e " Quantumult X: shadowsocks=$ip:${in_port}, method=${method}, password=${pw_out}, udp-relay=true, tag=${tag}"
-       echo ""
-       echo -e " Surge: ${tag} = ss, ${ip}, ${in_port}, encrypt-method=${method}, password=${pw_out}, udp-relay=true"
-    done
-  fi
-
-  # -------- relay exports --------
-  # Robust method:
-  # - Prefer route rules that point to out-to-<land> (this is definitive for "落地" relay)
-  # - For each such rule, take auth_user entries that are relay users (contains "-to-" or startswith "relay-")
-  # - Then lookup the corresponding user object from inbounds to get uuid/password.
-  if echo "$conf" | jq -e 'if type=="array" then {"log":{"level":"info","timestamp":true},"inbounds":.,"outbounds":[{"type":"direct","tag":"direct"}],"route":{"rules":[]}} else . end | .inbounds=(.inbounds//[]) | .outbounds=(.outbounds//[]) | .route=(.route//{"rules":[]}) | .route.rules=(.route.rules//[]) |  .route.rules[]? | select((.outbound? // "")|startswith("out-to-"))' >/dev/null 2>&1; then
-    # prepare ws-tls path for wstls relay export
-    local wstls_path="/Akaman"
-    if echo "$conf" | jq -e '.inbounds[]? | select(((.tag//"")|test("^vless-wstls-[0-9]+-in$")) or (.tag=="vless-ws-tls-in"))' >/dev/null 2>&1; then
-      local tmp_tag
-      tmp_tag=$(echo "$conf" | jq -r '.inbounds[]? | select(((.tag//"")|test("^vless-wstls-[0-9]+-in$")) or (.tag=="vless-ws-tls-in")) | .tag' | head -n1)
-      wstls_path=$(echo "$conf" | jq -r --arg t "$tmp_tag" '.inbounds[] | select(.tag==$t) | .transport.path // "/Akaman"' | head -n1)
-    fi
-
-    # iterate relay auth_user from route rules
-    echo "$conf" | jq -r '
-      (.route.rules // [])
-      | map(if (type=="object" and (.auth_user?!=null) and ((.auth_user|type)=="string")) then .auth_user=[.auth_user] else . end)
-      | .[]
-      | select((.outbound? // "")|startswith("out-to-"))
-      | (.auth_user[]? // empty)
-      | select((contains("-to-")) or (contains("-realy-")) or (startswith("relay-")))
-    ' | sort -u | while read -r r_full; do
-      [ -z "${r_full:-}" ] && continue
-
-      # lookup user object from ANY inbound users[]
-      local ujson r_pw r_uuid land proto port mapped coretag nodetag
-      ujson=$(echo "$conf" | jq -c --arg n "$r_full" '(.inbounds[]? | (.users? // []))[]? | select(.name==$n)' | head -n1)
-      if [ -z "${ujson:-}" ]; then
-        warn "未找到 relay 用户对象：${r_full}（可能配置被手动改动），跳过导出。"
-        continue
-      fi
-
-      r_pw=$(echo "$ujson" | jq -r '.password // empty')
-      r_uuid=$(echo "$ujson" | jq -r '.uuid // empty')
-
-      # parse proto/port/land (support legacy relay-*)
-      if echo "$r_full" | grep -q -- '-to-'; then
-        # new: "<proto>-<port>-to-<land>" where <proto> itself may contain '-'
-        local left
-        left="${r_full%%-to-*}"
-        land="${r_full##*-to-}"
-        port="${left##*-}"
-        proto="${left%-${port}}"
-      elif echo "$r_full" | grep -q -- '-realy-'; then
-        # legacy typo: "<proto>-<port>-realy-<land>"
-        local left
-        left="${r_full%%-realy-*}"
-        land="${r_full##*-realy-}"
-        port="${left##*-}"
-        proto="${left%-${port}}"
-      else
-        # legacy: relay-<proto>-<port>-<land>
-        proto=$(echo "$r_full" | awk -F'-' '{print $2}')
-        port=$(echo "$r_full" | awk -F'-' '{print $3}')
-        land="${r_full##*-}"
-      fi
-      [ -z "${proto:-}" ] && continue
-      [ -z "${port:-}" ] && port="0"
-      [ -z "${land:-}" ] && land="LAND"
-
-      # map legacy tokens to core proto names
-      case "$proto" in
-        reality) mapped="vless-reality" ;;
-        wstls)   mapped="vless-wstls" ;;
-        ss)      mapped="ss" ;;
-        vless-reality|vless-wstls) mapped="$proto" ;;
-        *) mapped="$proto" ;;
-      esac
-
-      coretag="${mapped}-${port}-in"
-      nodetag="${coretag}-to-${land}"
-
-      echo -e "\n${W}[${nodetag}落地]${NC}"
-
-      if [ "$mapped" = "ss" ] && [ -n "${r_pw:-}" ]; then
-        # SS relay: find inbound listen_port / method / top-level password where this relay user is attached; fallback to parsed port
-        local ss_port ss_m ss_sp ss_pw_out
-        ss_port=$(echo "$conf" | jq -r --arg user "$r_full" '
-          .inbounds[]?
-          | select(.type=="shadowsocks")
-          | select((.users? // []) | any(.name==$user))
-          | .listen_port // empty
-        ' | head -n1)
-        ss_m=$(echo "$conf" | jq -r --arg user "$r_full" '
-          .inbounds[]?
-          | select(.type=="shadowsocks")
-          | select((.users? // []) | any(.name==$user))
-          | .method // "aes-128-gcm"
-        ' | head -n1)
-        ss_sp=$(echo "$conf" | jq -r --arg user "$r_full" '
-          .inbounds[]?
-          | select(.type=="shadowsocks")
-          | select((.users? // []) | any(.name==$user))
-          | .password // empty
-        ' | head -n1)
-        [ -z "${ss_port:-}" ] && ss_port="$port"
-        if [ -n "${ss_sp:-}" ] && [ "${ss_sp}" != "null" ]; then
-          ss_pw_out="${ss_sp}:${r_pw}"
-        else
-          ss_pw_out="${r_pw}"
-        fi
-
-        echo -e " Clash: - {name: "${nodetag}", type: ss, server: $ip, port: ${ss_port}, cipher: ${ss_m}, password: "${ss_pw_out}", udp: true, smux: {enabled: true}}"
-        echo ""
-        echo -e " Quantumult X: shadowsocks=$ip:${ss_port}, method=${ss_m}, password=${ss_pw_out}, udp-relay=true, tag=${nodetag}"
-        echo ""
-        echo -e " Surge: ${nodetag} = ss, ${ip}, ${ss_port}, encrypt-method=${ss_m}, password=${ss_pw_out}, udp-relay=true"
-        continue
-      fi
-      # AnyTLS relay
-      if [ "$mapped" = "anytls" ] && [ -n "${r_pw:-}" ]; then
-        local any_sni any_port
-        any_port="$port"
-        any_sni=$(echo "$conf" | jq -r --arg t "anytls-${any_port}-in" '
-          .inbounds[]? | select(.tag==$t) | .tls.server_name // "www.icloud.com"
-        ' | head -n1)
-
-        echo -e " Clash: - {name: ${nodetag}, type: anytls, server: $ip, port: ${any_port}, password: \"${r_pw}\", client-fingerprint: chrome, udp: true, sni: \"${any_sni}\", alpn: [h2, http/1.1], skip-cert-verify: true}"
-        echo ""
-        echo -e " Surge: ${nodetag} = anytls, ${ip}, ${any_port}, password=${r_pw}, skip-cert-verify=true, sni=${any_sni}"
-        continue
-      fi
-
-
-
-      # VLESS relay
-      if [ "$mapped" = "vless-reality" ]; then
-        local v_sni v_sid v_port
-        v_sni=$(echo "$conf" | jq -r '.inbounds[]? | select(((.tag//"")|test("^vless-reality-[0-9]+-in$")) or (.tag=="vless-reality-in") or (.tag=="vless-main-in")) | .tls.server_name // "www.icloud.com"' | head -n1)
-        v_sid=$(echo "$conf" | jq -r '.inbounds[]? | select(((.tag//"")|test("^vless-reality-[0-9]+-in$")) or (.tag=="vless-reality-in") or (.tag=="vless-main-in")) | .tls.reality.short_id[0] // ""' | head -n1)
-        v_port=$(echo "$conf" | jq -r '.inbounds[]? | select(((.tag//"")|test("^vless-reality-[0-9]+-in$")) or (.tag=="vless-reality-in") or (.tag=="vless-main-in")) | .listen_port' | head -n1)
-
-        echo -e " Clash: - {name: ${nodetag}, type: vless, server: $ip, port: ${v_port}, uuid: ${r_uuid}, network: tcp, udp: true, tls: true, flow: xtls-rprx-vision, servername: $v_sni, reality-opts: {public-key: $v_pbk, short-id: '$v_sid'}, client-fingerprint: chrome}"
-        echo ""
-        echo -e " Quantumult X: vless=$ip:${v_port}, method=none, password=${r_uuid}, obfs=over-tls, obfs-host=$v_sni, reality-base64-pubkey=$v_pbk, reality-hex-shortid=$v_sid, vless-flow=xtls-rprx-vision, tag=${nodetag}"
-      else
-        echo -e " Clash: - {name: ${nodetag}, type: vless, server: $ip, port: ${wstls_public_port}, uuid: ${r_uuid}, udp: true, tls: true, network: ws, servername: ${wstls_domain}, ws-opts: {path: \"${wstls_path}\", headers: {Host: ${wstls_domain}}, max-early-data: 2048, early-data-header-name: Sec-WebSocket-Protocol}}"
-        echo ""
-        echo -e " Quantumult X: vless=${wstls_domain}:${wstls_public_port}, method=none, password=${r_uuid}, obfs=wss, obfs-uri=${wstls_path}?ed=2048, fast-open=false, udp-relay=true, tag=${nodetag}"
-      fi
+      echo -e " Clash: - {name: "${tag}", type: ss, server: $ip, port: ${in_port}, cipher: ${method}, password: "${pw_out}", udp: true, smux: {enabled: true}}"
+      echo ""
+      echo -e " Quantumult X: shadowsocks=$ip:${in_port}, method=${method}, password=${pw_out}, udp-relay=true, tag=${tag}"
+      echo ""
+      echo -e " Surge: ${tag} = ss, ${ip}, ${in_port}, encrypt-method=${method}, password=${pw_out}, udp-relay=true"
     done
   fi
 
@@ -1893,7 +1665,7 @@ main_menu() {
   while true; do
     clear
     echo -e "${B}┌──────────────────────────────────────────────────┐${NC}"
-    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-2.0.0  │${NC}"
+    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-2.2.4  │${NC}"
     echo -e "${B}└──────────────────────────────────────────────────┘${NC}"
     echo -e "  ${C}1.${NC} 安装/更新 sing-box"
     echo -e "  ${C}2.${NC} 清空/重置 config.json"
