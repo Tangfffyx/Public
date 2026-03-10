@@ -1,7 +1,7 @@
 #!/bin/bash
 # ====================================================
 # Project: Sing-box Elite Management System + Domo Installer
-# Version: 2.2.6
+# Version: 2.2.7
 #
 # Menu (per your requirements):
 #  1) Install/Update sing-box (APT repo, deps auto-check incl. sudo)
@@ -133,26 +133,29 @@ ensure_sb_shortcut() {
   local target_script="/root/sing-box.sh"
   local shortcut="/usr/local/bin/sb"
   local remote_url="https://raw.githubusercontent.com/Tangfffyx/Public/main/Script/sing-box.sh"
-
+  local current="${SCRIPT_SELF:-${BASH_SOURCE[0]:-$0}}"
   mkdir -p /usr/local/bin
 
-  if [[ "$0" == /dev/fd/* ]] || [[ "$0" == /proc/self/fd/* ]]; then
+  if [[ "$0" == /dev/fd/* ]] || [[ "$0" == /proc/self/fd/* ]] || [[ "$current" == /dev/fd/* ]] || [[ "$current" == /proc/self/fd/* ]]; then
     curl -Ls "$remote_url" -o "$target_script" || {
       warn "快捷命令 sb 安装失败：无法下载脚本到 $target_script"
       return 1
     }
   else
-    cp -f "$(realpath "$0")" "$target_script" || {
-      warn "快捷命令 sb 安装失败：无法复制脚本到 $target_script"
-      return 1
-    }
+    current="$(readlink -f "$current" 2>/dev/null || echo "$current")"
+    if [ "$current" != "$target_script" ]; then
+      cp -f "$current" "$target_script" || {
+        warn "快捷命令 sb 安装失败：无法复制脚本到 $target_script"
+        return 1
+      }
+    fi
   fi
 
   chmod +x "$target_script" >/dev/null 2>&1 || true
 
-  cat > "$shortcut" <<EOF
+  cat > "$shortcut" <<'EOF'
 #!/usr/bin/env bash
-bash "$target_script"
+bash /root/sing-box.sh
 EOF
   chmod +x "$shortcut" >/dev/null 2>&1 || true
 }
@@ -1721,7 +1724,7 @@ main_menu() {
   while true; do
     clear
     echo -e "${B}┌──────────────────────────────────────────────────┐${NC}"
-    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-2.2.6  │${NC}"
+    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-2.2.7  │${NC}"
     echo -e "${B}└──────────────────────────────────────────────────┘${NC}"
     echo -e "  ${C}1.${NC} 安装/更新 sing-box"
     echo -e "  ${C}2.${NC} 清空/重置 config.json"
