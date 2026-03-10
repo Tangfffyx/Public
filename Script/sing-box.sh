@@ -1730,16 +1730,3 @@ main_menu() {
 }
 
 main_menu
-
-install_sb_shortcut() {
-    local script_path
-    script_path="$(realpath "$0")"
-
-    if [ ! -f /usr/local/bin/sb ]; then
-        cat >/usr/local/bin/sb <<EOF
-#!/usr/bin/env bash
-bash "$script_path"
-EOF
-        chmod +x /usr/local/bin/sb
-    fi
-}
