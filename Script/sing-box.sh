@@ -1,7 +1,7 @@
 #!/bin/bash
 # ====================================================
 # Project: Sing-box Elite Management System + Domo Installer
-# Version: 2.2.4
+# Version: 2.2.6
 #
 # Menu (per your requirements):
 #  1) Install/Update sing-box (APT repo, deps auto-check incl. sudo)
@@ -28,6 +28,7 @@ set -Eeuo pipefail
 
 CONFIG_FILE="/etc/sing-box/config.json"
 TEMP_FILE="/etc/sing-box/config.json.tmp"
+SCRIPT_SELF="$(readlink -f "${BASH_SOURCE[0]:-$0}" 2>/dev/null || echo "${BASH_SOURCE[0]:-$0}")"
 
 # --- Legacy compatibility (<= V-1.10.2) ---
 LEGACY_VLESS_TAG="vless-main-in"
@@ -127,6 +128,14 @@ warn() { echo -e "${Y}[WARN]${NC} $*"; }
 err()  { echo -e "${R}[ERR ]${NC} $*"; }
 
 pause() { read -r -n 1 -p "按任意键返回..." || true; echo ""; }
+
+ensure_sb_shortcut() {
+  local target="${SCRIPT_SELF:-}"
+  [ -n "$target" ] || return 0
+  [ -f "$target" ] || return 0
+  chmod +x "$target" >/dev/null 2>&1 || true
+  ln -sf "$target" /usr/local/bin/sb >/dev/null 2>&1 || true
+}
 
 cleanup() { rm -f "$TEMP_FILE"; }
 trap cleanup EXIT
@@ -560,6 +569,8 @@ install_or_update_singbox() {
   fi
 
   show_versions
+  ensure_sb_shortcut
+  ok "已创建脚本快捷键: sb"
   pause
 }
 
@@ -774,19 +785,15 @@ ${C}可安装模块（多个用 + 连接，如 1+3+5）:${NC}"
               read -r -p " 监听端口: " v_port_in
               v_port=${v_port_in:-"443"}
             done
+            read -r -p " Private Key: " v_priv
+            read -r -p " Short ID: " v_sid
             read -r -p " SNI 域名 (默认: www.icloud.com): " v_sni_in
             local v_sni=${v_sni_in:-"www.icloud.com"}
-            local v_uuid v_priv_out v_pub_out v_priv v_pub v_sid v_tag in_v
+            local v_uuid v_tag in_v sid_json
             v_uuid=$(sing-box generate uuid)
-            v_priv_out=$(sing-box generate reality-keypair 2>/dev/null || true)
-            v_priv=$(echo "$v_priv_out" | awk '/PrivateKey/ {print $2}' | head -n1)
-            v_pub_out=$(sing-box generate reality-keypair 2>/dev/null || true)
-            v_pub=$(echo "$v_pub_out" | awk '/PublicKey/ {print $2}' | head -n1)
-            [ -z "${v_priv:-}" ] && v_priv="YOUR_PRIVATE_KEY"
-            [ -z "${v_pub:-}" ] && v_pub="YOUR_PUBLIC_KEY"
-            v_sid=$(openssl rand -hex 4)
+            if [ -z "${v_sid:-}" ]; then sid_json="[]"; else sid_json="["$v_sid"]"; fi
             v_tag="vless-reality-${v_port}-in"
-            in_v=$(jq -n --arg uuid "$v_uuid" --arg tag "$v_tag" --arg sni "$v_sni" --arg sid "$v_sid" --arg priv "$v_priv" --argjson port "$v_port" '{
+            in_v=$(jq -n --arg uuid "$v_uuid" --arg tag "$v_tag" --arg sni "$v_sni" --arg priv "$v_priv" --argjson sid "$sid_json" --argjson port "$v_port" '{
               "type":"vless",
               "tag":$tag,
               "listen":"::",
@@ -799,13 +806,12 @@ ${C}可安装模块（多个用 + 连接，如 1+3+5）:${NC}"
                   "enabled":true,
                   "handshake":{"server":$sni,"server_port":443},
                   "private_key":$priv,
-                  "short_id":[$sid]
+                  "short_id":$sid
                 }
               }
             }')
             updated_json=$(echo "$updated_json" | jq --arg t "$v_tag" '.inbounds |= map(select(.tag != $t))')
             updated_json=$(echo "$updated_json" | jq --argjson x "$in_v" '.inbounds += [$x]')
-            ok "Reality Public Key: ${v_pub}"
             ;;
           2)
             if [ "$has_anytls" = "true" ]; then
@@ -824,6 +830,7 @@ ${C}可安装模块（多个用 + 连接，如 1+3+5）:${NC}"
             local a_sni=${a_sni_in:-"www.icloud.com"}
             local a_pass a_tag in_a
             a_pass=$(openssl rand -base64 16)
+            openssl req -x509 -newkey ec:<(openssl ecparam -name prime256v1) -keyout /etc/sing-box/anytls.key -out /etc/sing-box/anytls.crt -days 36500 -nodes -subj "/CN=${a_sni}" &> /dev/null || true
             a_tag="anytls-${a_port}-in"
             in_a=$(jq -n --arg pass "$a_pass" --arg tag "$a_tag" --arg sni "$a_sni" --argjson port "$a_port" '{
               "type":"anytls",
@@ -831,7 +838,8 @@ ${C}可安装模块（多个用 + 连接，如 1+3+5）:${NC}"
               "listen":"::",
               "listen_port":$port,
               "users":[{"name":$tag,"password":$pass}],
-              "tls":{"enabled":true,"server_name":$sni}
+              "padding_scheme":[],
+              "tls":{"enabled":true,"server_name":$sni,"certificate_path":"/etc/sing-box/anytls.crt","key_path":"/etc/sing-box/anytls.key","alpn":["h2","http/1.1"]}
             }')
             updated_json=$(echo "$updated_json" | jq --arg t "$a_tag" '.inbounds |= map(select(.tag != $t))')
             updated_json=$(echo "$updated_json" | jq --argjson x "$in_a" '.inbounds += [$x]')
@@ -877,17 +885,17 @@ ${C}可安装模块（多个用 + 连接，如 1+3+5）:${NC}"
               if (.inbounds | any(is_ss_candidate)) then
                 .inbounds |= map(
                   if is_ss_candidate then
-                    .tag = $tag | .listen = "::" | .listen_port = ($port|tonumber) | .method = "2022-blake3-aes-128-gcm" | .password = (.password // $sp) | (if .multiplex? then .multiplex.enabled=true else .multiplex={"enabled":true} end) | .users = [$u]
+                    .tag = $tag | .listen = "::" | .listen_port = ($port|tonumber) | .method = "2022-blake3-aes-128-gcm" | .password = (.password // $sp) | del(.multiplex) | .users = [$u]
                   else . end
                 )
               elif (.inbounds | any(.tag==$tag)) then
                 .inbounds |= map(
                   if .tag==$tag then
-                    .listen = "::" | .listen_port = ($port|tonumber) | .method = "2022-blake3-aes-128-gcm" | (if .multiplex? then .multiplex.enabled=true else .multiplex={"enabled":true} end) | .users = [$u]
+                    .listen = "::" | .listen_port = ($port|tonumber) | .method = "2022-blake3-aes-128-gcm" | del(.multiplex) | .users = [$u]
                   else . end
                 )
               else
-                .inbounds += [{"type":"shadowsocks","tag":$tag,"listen":"::","listen_port":($port|tonumber),"method":"2022-blake3-aes-128-gcm","password":$sp,"users":[ $u ],"multiplex":{"enabled":true}}]
+                .inbounds += [{"type":"shadowsocks","tag":$tag,"listen":"::","listen_port":($port|tonumber),"method":"2022-blake3-aes-128-gcm","password":$sp,"users":[ $u ]}]
               end
             ')
             ;;
@@ -959,18 +967,19 @@ ${C}可安装模块（多个用 + 连接，如 1+3+5）:${NC}"
               continue
             fi
             echo -e " tuic-v5 模块: ${Y}未安装，开始安装...${NC}"
-            read -r -p " TUIC 端口 (默认: 8443): " t_port_in
-            local t_port=${t_port_in:-"8443"}
-            while port_is_in_use "$updated_json" "${t_port}" ""; do
-              warn "端口 ${t_port} 已被其它入站占用，请更换端口。"
+            read -r -p " TUIC 端口 (默认: 443): " t_port_in
+            local t_port=${t_port_in:-"443"}
+            while echo "$updated_json" | jq -e --arg p "$t_port" '.inbounds[]? | select(.type=="tuic" and ((.listen_port? // empty | tostring) == $p))' >/dev/null 2>&1; do
+              warn "端口 ${t_port} 已被其它 TUIC 入站占用，请更换端口。"
               read -r -p " 端口: " t_port_in
-              t_port=${t_port_in:-"8443"}
+              t_port=${t_port_in:-"443"}
             done
             read -r -p " TUIC 域名 (默认: www.icloud.com): " t_sni_in
             local t_sni=${t_sni_in:-"www.icloud.com"}
             local t_pass t_uuid t_tag in_t
             t_pass=$(openssl rand -base64 12)
             t_uuid=$(sing-box generate uuid)
+            openssl req -x509 -newkey ec:<(openssl ecparam -name prime256v1) -keyout /etc/sing-box/tuic.key -out /etc/sing-box/tuic.crt -days 36500 -nodes -subj "/CN=${t_sni}" &> /dev/null || true
             t_tag="tuic-${t_port}-in"
             in_t=$(jq -n --arg uuid "$t_uuid" --arg pass "$t_pass" --arg tag "$t_tag" --arg sni "$t_sni" --argjson port "$t_port" '{
               "type":"tuic",
@@ -978,7 +987,7 @@ ${C}可安装模块（多个用 + 连接，如 1+3+5）:${NC}"
               "listen":"::",
               "listen_port":$port,
               "users":[{"name":$tag,"uuid":$uuid,"password":$pass}],
-              "tls":{"enabled":true,"server_name":$sni},
+              "tls":{"enabled":true,"server_name":$sni,"alpn":["h3"],"certificate_path":"/etc/sing-box/tuic.crt","key_path":"/etc/sing-box/tuic.key"},
               "congestion_control":"bbr"
             }')
             updated_json=$(echo "$updated_json" | jq --arg t "$t_tag" '.inbounds |= map(select(.tag != $t))')
@@ -1232,7 +1241,7 @@ ${C}─── 添加/覆盖中转节点 ───${NC}"
 
   new_o=$(jq -n --arg tag "$out" --arg addr "$ip" --arg key "$pw" '{
     "type":"shadowsocks","tag":$tag,"server":$addr,"server_port":8080,
-    "method":"2022-blake3-aes-128-gcm","password":$key,"multiplex":{"enabled":true}
+    "method":"2022-blake3-aes-128-gcm","password":$key
   }')
 
   updated_json=$(echo "$conf" | jq --arg user "$user" '(.inbounds[]? | select(.users?!=null).users) |= (map(select((.name? // "") != $user)))')
@@ -1476,54 +1485,71 @@ ${W}[${tag}]${NC}"
     echo -e " Surge: tuic-v5 = tuic-v5, ${ip}, ${in_port}, password=${pass}, sni=${sni}, uuid=${uuid}, alpn=h3, ecn=true"
   fi
 
-  # -------- anytls direct --------
+  # -------- anytls direct + relay --------
   if echo "$conf" | jq -e '.inbounds[]? | select((.type=="anytls") or ((.tag//"")|test("^anytls-[0-9]+-in$")))' >/dev/null 2>&1; then
     echo "$conf" | jq -c '
       .inbounds[]?
       | select((.type=="anytls") or ((.tag//"")|test("^anytls-[0-9]+-in$")))
       | {tag:(.tag//""), port:(.listen_port//0), sni:(.tls.server_name // "www.icloud.com"), users:(.users // [])}
     ' | while read -r inbound; do
-      local in_tag in_port sni tag
+      local in_tag in_port sni core_tag
       in_tag=$(echo "$inbound" | jq -r '.tag')
       in_port=$(echo "$inbound" | jq -r '.port')
       sni=$(echo "$inbound" | jq -r '.sni')
-      tag="anytls-${in_port}-in"
+      core_tag="anytls-${in_port}-in"
       echo "$inbound" | jq -c '.users[]?' | while read -r u; do
-        local pass uname
-        uname=$(echo "$u" | jq -r '.name // "'"$tag"'"')
+        local pass uname out_tag
+        uname=$(echo "$u" | jq -r '.name // empty')
         pass=$(echo "$u" | jq -r '.password // empty')
         [ -z "${pass:-}" ] && continue
-        if [ "${uname:-}" != "${tag:-}" ]; then continue; fi
+        if [ -z "${uname:-}" ] || [ "${uname:-}" = "${in_tag:-}" ] || [ "${uname:-}" = "${core_tag:-}" ]; then
+          out_tag="${core_tag}"
+        else
+          out_tag="${uname}"
+        fi
         echo -e "
-${W}[${uname}]${NC}"
-        echo -e " Clash: - {name: ${uname}, type: anytls, server: $ip, port: ${in_port}, password: "${pass}", client-fingerprint: chrome, udp: true, sni: "${sni}", alpn: [h2, http/1.1], skip-cert-verify: true}"
+${W}[${out_tag}]${NC}"
+        echo -e " Clash: - {name: ${out_tag}, type: anytls, server: $ip, port: ${in_port}, password: "${pass}", client-fingerprint: chrome, udp: true, sni: "${sni}", alpn: [h2, http/1.1], skip-cert-verify: true}"
         echo ""
-        echo -e " Surge: ${uname} = anytls, ${ip}, ${in_port}, password=${pass}, skip-cert-verify=true, sni=${sni}"
+        echo -e " Surge: ${out_tag} = anytls, ${ip}, ${in_port}, password=${pass}, skip-cert-verify=true, sni=${sni}"
       done
     done
   fi
 
-  # -------- vless-reality direct --------
+  # -------- vless-reality direct + relay --------
   if echo "$conf" | jq -e '.inbounds[]? | select(((.tag//"")|test("^vless-reality-[0-9]+-in$")) or (.tag=="vless-reality-in") or (.tag=="vless-main-in"))' >/dev/null 2>&1; then
-    local in_tag in_port tag uuid sni sid
-    in_tag=$(echo "$conf" | jq -r '
-      ( .inbounds[]? | select((.tag//"")|test("^vless-reality-[0-9]+-in$")) | .tag ) ,
-      ( .inbounds[]? | select(.tag=="vless-reality-in") | .tag ) ,
-      ( .inbounds[]? | select(.tag=="vless-main-in") | .tag )
-    ' | head -n1)
-    in_port=$(echo "$conf" | jq -r --arg t "$in_tag" '.inbounds[]? | select(.tag==$t) | .listen_port' | head -n1)
-    tag=$(norm_core_tag "$in_tag" "$in_port")
-    uuid=$(echo "$conf" | jq -r --arg t "$in_tag" '.inbounds[]? | select(.tag==$t) | .users[0].uuid' | head -n1)
-    sni=$(echo "$conf" | jq -r --arg t "$in_tag" '.inbounds[]? | select(.tag==$t) | .tls.server_name // "www.icloud.com"' | head -n1)
-    sid=$(echo "$conf" | jq -r --arg t "$in_tag" '.inbounds[]? | select(.tag==$t) | .tls.reality.short_id[0] // ""' | head -n1)
-    echo -e "
-${W}[${tag}]${NC}"
-    echo -e " Clash: - {name: ${tag}, type: vless, server: $ip, port: $in_port, uuid: $uuid, network: tcp, udp: true, tls: true, flow: xtls-rprx-vision, servername: $sni, reality-opts: {public-key: $v_pbk, short-id: '$sid'}, client-fingerprint: chrome}"
-    echo ""
-    echo -e " Quantumult X: vless=$ip:$in_port, method=none, password=$uuid, obfs=over-tls, obfs-host=$sni, reality-base64-pubkey=$v_pbk, reality-hex-shortid=$sid, vless-flow=xtls-rprx-vision, tag=${tag}"
+    echo "$conf" | jq -c '
+      .inbounds[]?
+      | select(((.tag//"")|test("^vless-reality-[0-9]+-in$")) or (.tag=="vless-reality-in") or (.tag=="vless-main-in"))
+      | {tag:(.tag//""), port:(.listen_port//0), sni:(.tls.server_name // "www.icloud.com"), sid:(.tls.reality.short_id[0] // ""), users:(.users // [])}
+    ' | while read -r inbound; do
+      local in_tag in_port core_tag sni sid
+      in_tag=$(echo "$inbound" | jq -r '.tag')
+      in_port=$(echo "$inbound" | jq -r '.port')
+      core_tag=$(norm_core_tag "$in_tag" "$in_port")
+      sni=$(echo "$inbound" | jq -r '.sni')
+      sid=$(echo "$inbound" | jq -r '.sid')
+      echo "$inbound" | jq -c '.users[]?' | while read -r u; do
+        local uname uuid flow out_tag
+        uname=$(echo "$u" | jq -r '.name // empty')
+        uuid=$(echo "$u" | jq -r '.uuid // empty')
+        flow=$(echo "$u" | jq -r '.flow // "xtls-rprx-vision"')
+        [ -z "${uuid:-}" ] && continue
+        if [ -z "${uname:-}" ] || [ "${uname:-}" = "${in_tag:-}" ] || [ "${uname:-}" = "${core_tag:-}" ] || [ "${uname:-}" = "vless-reality-user" ] || [ "${uname:-}" = "direct-user" ]; then
+          out_tag="${core_tag}"
+        else
+          out_tag="${uname}"
+        fi
+        echo -e "
+${W}[${out_tag}]${NC}"
+        echo -e " Clash: - {name: ${out_tag}, type: vless, server: $ip, port: $in_port, uuid: $uuid, network: tcp, udp: true, tls: true, flow: ${flow}, servername: $sni, reality-opts: {public-key: $v_pbk, short-id: '$sid'}, client-fingerprint: chrome}"
+        echo ""
+        echo -e " Quantumult X: vless=$ip:$in_port, method=none, password=$uuid, obfs=over-tls, obfs-host=$sni, reality-base64-pubkey=$v_pbk, reality-hex-shortid=$sid, vless-flow=${flow}, udp-relay=true, tag=${out_tag}"
+      done
+    done
   fi
 
-  # -------- shadowsocks direct (core only) --------
+  # -------- shadowsocks direct + relay --------
   if echo "$conf" | jq -e '.inbounds[]? | select(.type=="shadowsocks") | select(((.tag//"")|test("^ss-[0-9]+-in$")) or ((.tag//"")|startswith("ss-in")))' >/dev/null 2>&1; then
     echo "$conf" | jq -c '
       .inbounds[]?
@@ -1531,22 +1557,31 @@ ${W}[${tag}]${NC}"
       | select(((.tag//"")|test("^ss-[0-9]+-in$")) or ((.tag//"")|startswith("ss-in")))
       | {tag:(.tag//""), port:(.listen_port//0), sp:(.password // ""), users:(if .users? then .users elif .password? then [{"name":(.tag//"default"),"password":.password}] else [] end), method:(.method//"2022-blake3-aes-128-gcm")}
     ' | while read -r inbound; do
-      local in_tag in_port method tag pass sp pw_out
+      local in_tag in_port method core_tag sp
       in_tag=$(echo "$inbound" | jq -r '.tag')
       in_port=$(echo "$inbound" | jq -r '.port')
       method=$(echo "$inbound" | jq -r '.method')
-      tag=$(norm_core_tag "$in_tag" "$in_port")
+      core_tag=$(norm_core_tag "$in_tag" "$in_port")
       sp=$(echo "$inbound" | jq -r '.sp // ""')
-      pass=$(echo "$inbound" | jq -r --arg name "$tag" '(.users // []) as $u | ((($u | map(select(.name==$name)))[0].password) // ($u[0].password // empty))')
-      [ -z "${pass:-}" ] && continue
-      if [ -n "${sp:-}" ] && [ "${sp}" != "null" ]; then pw_out="${sp}:${pass}"; else pw_out="${pass}"; fi
-      echo -e "
-${W}[${tag}]${NC}"
-      echo -e " Clash: - {name: "${tag}", type: ss, server: $ip, port: ${in_port}, cipher: ${method}, password: "${pw_out}", udp: true, smux: {enabled: true}}"
-      echo ""
-      echo -e " Quantumult X: shadowsocks=$ip:${in_port}, method=${method}, password=${pw_out}, udp-relay=true, tag=${tag}"
-      echo ""
-      echo -e " Surge: ${tag} = ss, ${ip}, ${in_port}, encrypt-method=${method}, password=${pw_out}, udp-relay=true"
+      echo "$inbound" | jq -c '.users[]?' | while read -r u; do
+        local uname pass out_tag pw_out
+        uname=$(echo "$u" | jq -r '.name // empty')
+        pass=$(echo "$u" | jq -r '.password // empty')
+        [ -z "${pass:-}" ] && continue
+        if [ -z "${uname:-}" ] || [ "${uname:-}" = "${in_tag:-}" ] || [ "${uname:-}" = "${core_tag:-}" ]; then
+          out_tag="${core_tag}"
+        else
+          out_tag="${uname}"
+        fi
+        if [ -n "${sp:-}" ] && [ "${sp}" != "null" ] && [ "${sp}" != "${pass}" ]; then pw_out="${sp}:${pass}"; else pw_out="${pass}"; fi
+        echo -e "
+${W}[${out_tag}]${NC}"
+        echo -e " Clash: - {name: "${out_tag}", type: ss, server: $ip, port: ${in_port}, cipher: ${method}, password: "${pw_out}", udp: true}"
+        echo ""
+        echo -e " Quantumult X: shadowsocks=$ip:${in_port}, method=${method}, password=${pw_out}, udp-relay=true, tag=${out_tag}"
+        echo ""
+        echo -e " Surge: ${out_tag} = ss, ${ip}, ${in_port}, encrypt-method=${method}, password=${pw_out}, udp-relay=true"
+      done
     done
   fi
 
@@ -1662,10 +1697,11 @@ uninstall_singbox_keep_config() {
 
 # ---------- Menu ----------
 main_menu() {
+  ensure_sb_shortcut
   while true; do
     clear
     echo -e "${B}┌──────────────────────────────────────────────────┐${NC}"
-    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-2.2.4  │${NC}"
+    echo -e "${B}│     Sing-box Elite 管理系统 + Installer V-2.2.6  │${NC}"
     echo -e "${B}└──────────────────────────────────────────────────┘${NC}"
     echo -e "  ${C}1.${NC} 安装/更新 sing-box"
     echo -e "  ${C}2.${NC} 清空/重置 config.json"
