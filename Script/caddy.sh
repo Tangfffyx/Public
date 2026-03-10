@@ -2,10 +2,10 @@
 set -euo pipefail
 
 # ==========================================
-# Caddy 管理脚本 (v6.0.0 GitHub发布版)
+# Caddy 管理脚本 (v6.1.0 GitHub发布版)
 # ==========================================
 SCRIPT_NAME="Caddy 管理脚本"
-SCRIPT_VERSION="6.0.0"
+SCRIPT_VERSION="6.1.0"
 
 CADDYFILE="/etc/caddy/Caddyfile"
 REPO_LIST="/etc/apt/sources.list.d/caddy-stable.list"
@@ -65,13 +65,22 @@ rollback_caddyfile() {
   echo -e "${YEL}[回滚]${NC} 正在恢复至 ${bak}"
   cp -f "${bak}" "${CADDYFILE}"
   fix_caddyfile_perms
-  apply_config_or_show_logs
+  if ! apply_config_or_show_logs; then
+    pause_return_menu
+    return 1
+  fi
 }
 
 # 自动格式化
 auto_format() { 
   cmd_exists caddy && caddy fmt --overwrite "${CADDYFILE}" >/dev/null 2>&1 || true
   fix_caddyfile_perms 
+}
+
+pause_return_menu() {
+  echo
+  read -r -n 1 -s -p "按任意键返回上一级菜单..." _dummy
+  echo
 }
 
 # 初始化 Caddyfile
@@ -132,7 +141,7 @@ remove_domain_smart() {
   mv "${tmp}" "${CADDYFILE}"; fix_caddyfile_perms; auto_format
 }
 
-# 注入配置：支持 A+B 备注合并，路径覆盖
+# 注入配置：支持 A+B 备注合并，路径/目标覆盖
 inject_proxy_config() {
   local domain="$1" path="$2" target="$3" mode="$4" note="$5"
   ensure_caddyfile_init; backup_caddyfile
@@ -265,10 +274,18 @@ append_proxy_line() {
 
 apply_config_or_show_logs() {
   echo -e "${GRN}[校验]${NC} Validating..."
-  if ! caddy validate --config "${CADDYFILE}"; then echo -e "${RED}校验失败${NC}"; exit 1; fi
+  if ! caddy validate --config "${CADDYFILE}"; then
+    echo -e "${RED}校验失败${NC}"
+    return 1
+  fi
   systemctl restart caddy >/dev/null 2>&1 || true
-  if systemctl is-active caddy >/dev/null 2>&1; then echo -e "${GRN}[成功]${NC} Caddy 已重载配置"; else 
-    echo -e "${RED}启动失败，最后 20 行日志:${NC}"; journalctl -xeu caddy --no-pager -n 20 || true; exit 1; fi
+  if systemctl is-active caddy >/dev/null 2>&1; then
+    echo -e "${GRN}[成功]${NC} Caddy 已重载配置"
+  else
+    echo -e "${RED}启动失败，最后 20 行日志:${NC}"
+    journalctl -xeu caddy --no-pager -n 20 || true
+    return 1
+  fi
 }
 
 # ==========================================
@@ -298,9 +315,9 @@ option_add_proxy() {
   
   # 域名 (所有模式都需要)
   local domain
-  read -r -p "请输入域名 (如 sub.example.com): " domain
+  read -r -p "请输入解析域名（如 example.com）: " domain
   domain="${domain// /}"
-  [[ -z "${domain}" ]] && { echo -e "${RED}域名不能为空${NC}"; return 1; }
+  [[ -z "${domain}" ]] && { echo -e "${RED}域名不能为空${NC}"; pause_return_menu; return 0; }
 
   local path="" target="" note=""
   
@@ -328,9 +345,9 @@ option_add_proxy() {
     # 其他模式：路径默认为空
     path=""
     
-    read -r -p "请输入目标 (端口 8080 或 https://x.com): " target
+    read -r -p "请输入反代目标（端口8080或example.com）: " target
     target="${target// /}"
-    [[ -z "${target}" ]] && { echo -e "${RED}目标不能为空${NC}"; return 1; }
+    [[ -z "${target}" ]] && { echo -e "${RED}目标不能为空${NC}"; pause_return_menu; return 0; }
     
     # 格式修正
     if [[ "$target" =~ ^[0-9]+$ ]]; then target="127.0.0.1:$target"; fi
@@ -346,7 +363,10 @@ option_add_proxy() {
   
   inject_proxy_config "${domain}" "${path}" "${target}" "${mode_internal}" "${note}"
   echo -e "${GRN}[完成]${NC} 配置已写入"
-  apply_config_or_show_logs
+  if ! apply_config_or_show_logs; then
+    pause_return_menu
+    return 0
+  fi
 }
 
 option_delete_domain() {
