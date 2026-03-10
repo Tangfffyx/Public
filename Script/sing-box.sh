@@ -130,11 +130,31 @@ err()  { echo -e "${R}[ERR ]${NC} $*"; }
 pause() { read -r -n 1 -p "按任意键返回..." || true; echo ""; }
 
 ensure_sb_shortcut() {
-  local target="${SCRIPT_SELF:-}"
-  [ -n "$target" ] || return 0
-  [ -f "$target" ] || return 0
-  chmod +x "$target" >/dev/null 2>&1 || true
-  ln -sf "$target" /usr/local/bin/sb >/dev/null 2>&1 || true
+  local target_script="/root/sing-box.sh"
+  local shortcut="/usr/local/bin/sb"
+  local remote_url="https://raw.githubusercontent.com/Tangfffyx/Public/main/Script/sing-box.sh"
+
+  mkdir -p /usr/local/bin
+
+  if [[ "$0" == /dev/fd/* ]] || [[ "$0" == /proc/self/fd/* ]]; then
+    curl -Ls "$remote_url" -o "$target_script" || {
+      warn "快捷命令 sb 安装失败：无法下载脚本到 $target_script"
+      return 1
+    }
+  else
+    cp -f "$(realpath "$0")" "$target_script" || {
+      warn "快捷命令 sb 安装失败：无法复制脚本到 $target_script"
+      return 1
+    }
+  fi
+
+  chmod +x "$target_script" >/dev/null 2>&1 || true
+
+  cat > "$shortcut" <<EOF
+#!/usr/bin/env bash
+bash "$target_script"
+EOF
+  chmod +x "$shortcut" >/dev/null 2>&1 || true
 }
 
 cleanup() { rm -f "$TEMP_FILE"; }
