@@ -24,27 +24,27 @@ err()  { echo -e "${R}[ERR ]${NC} $*"; }
 pause(){ read -r -n 1 -p "按任意键继续..." || true; echo ""; }
 
 text_display_width() {
-  python3 - "${1:-}" <<'PY'
-import sys
-s = sys.argv[1]
-width = 0
-for ch in s:
-    width += 2 if ord(ch) > 127 else 1
-print(width)
-PY
+  local s="${1:-}"
+  local width=0
+  local i ch
+
+  for ((i=0; i<${#s}; i++)); do
+    ch="${s:i:1}"
+    if [[ "$ch" =~ [ -~] ]]; then
+      width=$((width + 1))
+    else
+      width=$((width + 2))
+    fi
+  done
+
+  echo "$width"
 }
 
 print_rect_title() {
   local title="$1"
   local inner_width=46
-  local title_width pad left right
-  title_width=$(text_display_width "$title")
-  pad=$(( inner_width - title_width ))
-  [ "$pad" -lt 0 ] && pad=0
-  left=$(( pad / 2 ))
-  right=$(( pad - left ))
   printf "%b+%s+%b\n" "$B" "$(printf '%*s' "$inner_width" '' | tr ' ' '-')" "$NC"
-  printf "%b|%*s%s%*s|%b\n" "$B" "$left" '' "$title" "$right" '' "$NC"
+  printf "%b| %-46s |%b\n" "$B" "$title" "$NC"
   printf "%b+%s+%b\n" "$B" "$(printf '%*s' "$inner_width" '' | tr ' ' '-')" "$NC"
 }
 
