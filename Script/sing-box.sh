@@ -25,18 +25,41 @@ pause(){ read -r -n 1 -p "按任意键继续..." || true; echo ""; }
 
 text_display_width() {
   local s="${1:-}"
-  echo ${#s}
+  local width=0
+  local i ch ord
+
+  for ((i=0; i<${#s}; i++)); do
+    ch="${s:i:1}"
+
+    LC_ALL=C printf -v ord '%d' "'$ch" 2>/dev/null || ord=255
+
+    if (( ord >= 32 && ord <= 126 )); then
+      width=$((width + 1))
+    else
+      width=$((width + 2))
+    fi
+  done
+
+  echo "$width"
 }
 
 print_rect_title() {
   local title="$1"
   local inner_width=46
-  printf "%b+%s+%b
-" "$B" "$(printf '%*s' "$inner_width" '' | tr ' ' '-')" "$NC"
-  printf "%b| %-46s |%b
-" "$B" "$title" "$NC"
-  printf "%b+%s+%b
-" "$B" "$(printf '%*s' "$inner_width" '' | tr ' ' '-')" "$NC"
+  local title_width pad left right line
+
+  title_width=$(text_display_width "$title")
+  pad=$(( inner_width - title_width ))
+  (( pad < 0 )) && pad=0
+
+  left=$(( pad / 2 ))
+  right=$(( pad - left ))
+
+  line=$(printf '%*s' "$inner_width" '' | tr ' ' '-')
+
+  printf "%b+%s+%b\n" "$B" "$line" "$NC"
+  printf "%b|%*s%s%*s|%b\n" "$B" "$left" "" "$title" "$right" "" "$NC"
+  printf "%b+%s+%b\n" "$B" "$line" "$NC"
 }
 
 cleanup() { rm -f "$TEMP_FILE"; }
