@@ -25,28 +25,18 @@ pause(){ read -r -n 1 -p "按任意键继续..." || true; echo ""; }
 
 text_display_width() {
   local s="${1:-}"
-  local width=0
-  local i ch
-
-  for ((i=0; i<${#s}; i++)); do
-    ch="${s:i:1}"
-
-    if [[ $(printf "%d" "'$ch") -le 127 ]]; then
-      width=$((width + 1))
-    else
-      width=$((width + 2))
-    fi
-  done
-
-  echo "$width"
+  echo ${#s}
 }
 
 print_rect_title() {
   local title="$1"
   local inner_width=46
-  printf "%b+%s+%b\n" "$B" "$(printf '%*s' "$inner_width" '' | tr ' ' '-')" "$NC"
-  printf "%b| %-46s |%b\n" "$B" "$title" "$NC"
-  printf "%b+%s+%b\n" "$B" "$(printf '%*s' "$inner_width" '' | tr ' ' '-')" "$NC"
+  printf "%b+%s+%b
+" "$B" "$(printf '%*s' "$inner_width" '' | tr ' ' '-')" "$NC"
+  printf "%b| %-46s |%b
+" "$B" "$title" "$NC"
+  printf "%b+%s+%b
+" "$B" "$(printf '%*s' "$inner_width" '' | tr ' ' '-')" "$NC"
 }
 
 cleanup() { rm -f "$TEMP_FILE"; }
@@ -800,7 +790,7 @@ relay_add() {
   fi
 
   clear
-  echo -e "${C}─── 添加/覆盖中转节点 ───${NC}"
+  echo -e "${C}--- 添加/覆盖中转节点 ---${NC}"
   echo -e "${C}请选择主入站：${NC}"
   local i=1
   for entry_key in "${entry_keys[@]}"; do
@@ -901,7 +891,7 @@ relay_delete() {
   fi
 
   clear
-  echo -e "${R}─── 删除中转节点 ───${NC}"
+  echo -e "${R}--- 删除中转节点 ---${NC}"
   local i=1
   for line in "${lines[@]}"; do
     IFS=$'\t' read -r entry relay_user out_tag <<< "$line"
@@ -951,7 +941,7 @@ manage_relay_nodes() {
       echo -e "  ${Y}当前没有中转节点。${NC}"
     fi
     rm -f /tmp/.sb_relay_list.$$ >/dev/null 2>&1 || true
-    echo -e "${B}────────────────────────────────────────${NC}"
+    echo -e "${B}----------------------------------------${NC}"
     echo -e "  ${C}1.${NC} 添加/覆盖中转"
     echo -e "  ${C}2.${NC} 删除中转"
     echo -e "  ${R}0.${NC} 返回主菜单"
@@ -1003,7 +993,7 @@ export_configs() {
   ws_domain="$(echo "$ctx" | jq -r '.ws_domain')"
   vm_domain="$(echo "$ctx" | jq -r '.vm_domain')"
 
-  echo -e "${C}─── 节点配置导出 ───${NC}"
+  echo -e "${C}--- 节点配置导出 ---${NC}"
 
   local direct_tmp relay_tmp
   direct_tmp="$(mktemp)"
@@ -1179,10 +1169,10 @@ show_versions() {
   local inst cand
   inst="$(get_installed_version)"
   cand="$(get_candidate_version)"
-  echo -e "${W}──────── 版本信息 ────────${NC}"
+  echo -e "${W}-------- 版本信息 --------${NC}"
   echo -e " Installed : ${inst:-<not installed>}"
   echo -e " Candidate : ${cand:-<none>}"
-  echo -e "${W}──────────────────────────${NC}"
+  echo -e "${W}--------------------------${NC}"
 }
 
 install_script_self() {
@@ -1270,7 +1260,7 @@ install_or_update_singbox() {
 sync_system_time_chrony() {
   require_root
   clear
-  echo -e "${R}─── 一键同步系统时间 ───${NC}"
+  echo -e "${R}--- 一键同步系统时间 ---${NC}"
   if ! has_cmd chronyc; then
     warn "未检测到 chrony，开始安装..."
     apt_update_once
@@ -1299,7 +1289,7 @@ sync_system_time_chrony() {
 uninstall_singbox_keep_config() {
   require_root
   clear
-  echo -e "${R}─── 卸载 sing-box（保留 /etc/sing-box/ 配置）───${NC}"
+  echo -e "${R}--- 卸载 sing-box（保留 /etc/sing-box/ 配置）---${NC}"
   echo -e "${Y}注意：该操作将卸载 sing-box 程序包，配置目录 /etc/sing-box/ 保留。${NC}"
   ask_confirm_yes || { warn "已取消卸载。"; pause; return 0; }
 
@@ -1318,7 +1308,7 @@ uninstall_singbox_keep_config() {
 
 show_service_status() {
   clear
-  echo -e "${C}─── sing-box 服务状态 ───${NC}"
+  echo -e "${C}--- sing-box 服务状态 ---${NC}"
   systemctl --no-pager -l status sing-box 2>/dev/null || true
   echo ""
   pause
@@ -1332,7 +1322,7 @@ config_health_check() {
   clear
   local json problems=0
   json="$(config_load)"
-  echo -e "${C}─── 配置体检 ───${NC}"
+  echo -e "${C}--- 配置体检 ---${NC}"
 
   if ! check_config_or_print >/dev/null 2>&1; then
     err "sing-box 配置校验未通过。"
@@ -1575,7 +1565,7 @@ protocol_manager() {
 clear_config_json() {
   init_manager_env
   clear
-  echo -e "${Y}─── 清空/重置配置文件 ───${NC}"
+  echo -e "${Y}--- 清空/重置配置文件 ---${NC}"
   echo -e "${Y}注意：该操作将清空当前 config.json。${NC}"
   ask_confirm_yes || { warn "已取消清空/重置。"; pause; return 0; }
   config_reset
@@ -1604,7 +1594,7 @@ system_tools_menu() {
 view_config_formatted() {
   init_manager_env
   clear
-  echo -e "${C}─── 查看格式化配置 ───${NC}"
+  echo -e "${C}--- 查看格式化配置 ---${NC}"
   sing-box format -c "$CONFIG_FILE" || err "sing-box format 执行失败。"
   echo ""
   pause
