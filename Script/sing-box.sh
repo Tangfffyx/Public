@@ -30,7 +30,8 @@ text_display_width() {
 
   for ((i=0; i<${#s}; i++)); do
     ch="${s:i:1}"
-    if [[ "$ch" =~ [ -~] ]]; then
+
+    if [[ $(printf "%d" "'$ch") -le 127 ]]; then
       width=$((width + 1))
     else
       width=$((width + 2))
