@@ -1,9 +1,20 @@
 #!/usr/bin/env bash
+
+# ==================================================
+# jq模板：统一把 auth_user 转成数组，避免字符串/数组混用导致的问题
+AUTH_USER_ARRAY='
+if (.auth_user? == null) then []
+elif ((.auth_user | type) == "array") then .auth_user
+else [ .auth_user ]
+end
+'
+# ==================================================
+
 set -Eeuo pipefail
 
 # ====================================================
 # Project : Sing-box Elite Management System
-# Version : 3.0.14
+# Version : 3.0.17
 # Notes   : Single-file refactor, managed-route rebuild, no legacy compatibility.
 # ====================================================
 
@@ -13,6 +24,7 @@ SCRIPT_SELF="$(readlink -f "${BASH_SOURCE[0]:-$0}" 2>/dev/null || echo "${BASH_S
 SB_TARGET_SCRIPT="/root/sing-box.sh"
 SB_SHORTCUT="/usr/local/bin/sb"
 REMOTE_SCRIPT_URL="https://raw.githubusercontent.com/Tangfffyx/Public/main/Script/sing-box.sh"
+SCRIPT_VERSION="3.0.17"
 
 # ---------- UI ----------
 B='\033[1;34m'; G='\033[1;32m'; R='\033[1;31m'; Y='\033[1;33m'; C='\033[1;36m'; NC='\033[0m'; W='\033[1;37m'
@@ -127,19 +139,6 @@ get_public_ip() {
   [ -z "$ip" ] && ip=$(curl -s4 --max-time 3 --connect-timeout 2 icanhazip.com 2>/dev/null | tr -d '\n' || true)
   [ -z "$ip" ] && ip="IP"
   echo "$ip"
-}
-
-join_by() {
-  local delim="$1"; shift || true
-  local first=1 x
-  for x in "$@"; do
-    if [ $first -eq 1 ]; then
-      printf "%s" "$x"
-      first=0
-    else
-      printf "%s%s" "$delim" "$x"
-    fi
-  done
 }
 
 parse_plus_selections() {
@@ -430,16 +429,6 @@ relay_user_to_outbound() {
   if [[ "$1" =~ -to-(.+)$ ]]; then echo "to-${BASH_REMATCH[1]}"; else echo "out-$1"; fi
 }
 
-entry_key_exists() {
-  local json="$1" entry_key="$2"
-  echo "$json" | jq -e --arg ek "$entry_key" '.inbounds[]? | select(.tag==$ek)' >/dev/null 2>&1
-}
-
-list_entry_keys() {
-  local json="$1"
-  echo "$json" | jq -r '.inbounds[]?.tag // empty' | awk 'NF' | sort -u
-}
-
 protocol_entry_inventory() {
   local json="$1"
   echo "$json" | jq -r '
@@ -497,7 +486,14 @@ inbound_protocol_name() {
   '
 }
 
-remove_relays_by_user_names() {
+# --------------------------------------------------
+# remove_relays_by_user_names
+# 作用：
+#   删除指定 relay user
+#   更新相关 route.rules
+#   不直接删除 outbound，由 route_rebuild 最终清理
+# --------------------------------------------------
+remove_relays_by_user_names(){
   local json="$1" users_json="$2"
   local updated_json
 
@@ -530,13 +526,17 @@ remove_relays_by_user_names() {
   route_rebuild "$updated_json" || return 1
 }
 
-list_relay_users() {
-
-  local json="$1"
-  relay_list_table "$json" | awk -F '	' 'NF >= 2 {print $2}' | awk 'NF' | sort -u
-}
-
-route_rebuild() {
+# --------------------------------------------------
+# route_rebuild
+# 作用：
+#   根据当前 inbounds/users 重建托管 route 规则
+#   自动生成 direct 规则
+#   自动生成 relay 规则
+#   清理无引用的 relay outbound
+# 注意：
+#   不会修改非托管 route
+# --------------------------------------------------
+route_rebuild(){
   local json="$1"
   local normalized managed_users_json core_users_json relay_pairs_json preserved_rules_json
 
@@ -647,17 +647,6 @@ find_inbound_by_entry_key() {
   echo "$json" | jq -c --arg ek "$entry_key" '.inbounds[]? | select(.tag==$ek)' | head -n1
 }
 
-entry_summary_lines() {
-  local json="$1"
-  echo "$json" | jq -r '
-    .inbounds[]?
-    | [(.tag // "-"), (.type // "-"), ((.listen_port // 0)|tostring)]
-    | @tsv
-  ' | while IFS=$'\t' read -r tag type port; do
-    printf "  - %s  (%s, port=%s)\n" "$tag" "$type" "$port"
-  done
-}
-
 # ====================================================
 # 400 Protocol builders / removers
 # ====================================================
@@ -696,7 +685,6 @@ show_managed_relay_lines() {
   done < <(relay_list_table "$json")
   [ $found -eq 1 ]
 }
-
 
 build_vless_reality_inbound() {
   local port="$1" sni="$2" priv="$3" sid="$4"
@@ -855,7 +843,14 @@ build_tuic_inbound() {
   '
 }
 
-remove_inbound_by_entry_key() {
+# --------------------------------------------------
+# remove_inbound_by_entry_key
+# 作用：
+#   删除指定 entry_key 对应的 inbound
+#   同时清理该 inbound 关联的 users 和 route 规则
+#   最终由 route_rebuild 统一收口
+# --------------------------------------------------
+remove_inbound_by_entry_key(){
   local json="$1" entry_key="$2"
   local inbound_users_json related_outbounds_json updated_json
 
@@ -888,7 +883,7 @@ remove_inbound_by_entry_key() {
         ]
         + [
             ($users // [])[] as $u
-            | (["out-" + $u] + (if ($u | test(".*-to-.+")) then ["out-to-" + (($u | capture(".*-to-(?<land>.+)$").land)), "to-" + (($u | capture(".*-to-(?<land>.+)$").land))] else [] end))[] as $cand
+            | (["out-" + $u] + (if ($u | contains("-to-")) then ["out-to-" + (($u | capture(".*-to-(?<land>.+)$").land)), "to-" + (($u | capture(".*-to-(?<land>.+)$").land))] else [] end))[] as $cand
             | .outbounds[]?
             | .tag // empty
             | select(. == $cand)
@@ -987,12 +982,12 @@ relay_list_table() {
             | select(. != "" and . != "direct")
           ] as $outs
         | [
-            (["out-" + $name] + (if ($name | test(".*-to-.+")) then ["out-to-" + (($name | capture(".*-to-(?<land>.+)$").land)), "to-" + (($name | capture(".*-to-(?<land>.+)$").land))] else [] end))[] as $cand
+            (["out-" + $name] + (if ($name | contains("-to-")) then ["out-to-" + (($name | capture(".*-to-(?<land>.+)$").land)), "to-" + (($name | capture(".*-to-(?<land>.+)$").land))] else [] end))[] as $cand
             | $root.outbounds[]?
             | .tag // empty
             | select(. == $cand)
           ] as $fallback_outs
-        | select(($outs | length) > 0 or ($fallback_outs | length) > 0 or ($name | test(".*-to-.+")))
+        | select(($outs | length) > 0 or ($fallback_outs | length) > 0 or ($name | contains("-to-")))
         | [$entry, $name, (if ($outs | length) > 0 then $outs[0] elif ($fallback_outs | length) > 0 then $fallback_outs[0] else "" end)]
       ]
     | unique
@@ -1003,7 +998,7 @@ relay_list_table() {
 
 relay_add() {
   init_manager_env
-  local json lines=() entry_key choice land ip pw normalized_pw relay_user out_tag inbound proto
+  local json lines=() entry_key choice land ip pw normalized_pw relay_user out_tag inbound
   json="$(config_load)"
 
   mapfile -t lines < <(protocol_entry_table "$json")
@@ -1555,60 +1550,18 @@ uninstall_singbox_keep_config() {
   pause
 }
 
-show_service_status() {
-  clear
-  echo -e "${C}--- sing-box 服务状态 ---${NC}"
-  systemctl --no-pager -l status sing-box 2>/dev/null || true
-  echo ""
-  pause
-}
-
 # ====================================================
 # 800 Views / Health / protocol manager
 # ====================================================
-config_health_check() {
-  init_manager_env
-  clear
-  local json problems=0
-  json="$(config_load)"
-  echo -e "${C}--- 配置体检 ---${NC}"
 
-  if ! check_config_or_print >/dev/null 2>&1; then
-    err "sing-box 配置校验未通过。"
-    problems=$((problems+1))
-  else
-    ok "sing-box check 通过。"
-  fi
-
-  local dup_count
-  dup_count="$(echo "$json" | jq -r '[.inbounds[]?.tag] | group_by(.) | map(select(length>1)) | length')"
-  if [ "$dup_count" -gt 0 ]; then
-    err "发现重复 entry_key。"
-    problems=$((problems+1))
-  else
-    ok "未发现重复 entry_key。"
-  fi
-
-  while IFS=$'	' read -r _ relay_user out_tag; do
-    [ -z "$relay_user" ] && continue
-    if [ -z "$out_tag" ]; then
-      err "中转用户缺少对应 outbound：$relay_user"
-      problems=$((problems+1))
-    elif ! echo "$json" | jq -e --arg o "$out_tag" '.outbounds[]? | select(.tag==$o)' >/dev/null 2>&1; then
-      err "中转用户缺少对应 outbound：$relay_user -> $out_tag"
-      problems=$((problems+1))
-    fi
-  done < <(relay_list_table "$json")
-
-  if [ "$problems" -eq 0 ]; then
-    ok "配置体检通过。"
-  else
-    warn "配置体检发现问题数：$problems"
-  fi
-  pause
-}
-
-normalize_takeover() {
+# --------------------------------------------------
+# normalize_takeover
+# 作用：
+#   对已有 config 做一次规范化接管
+#   统一 entry_key / relay user / outbound 命名
+#   不改变已有节点功能
+# --------------------------------------------------
+normalize_takeover(){
   init_manager_env
   clear
   local json work_json
@@ -1628,7 +1581,7 @@ normalize_takeover() {
     return 0
   fi
 
-  local line idx oldtag proto port target cnt current_count
+  local line idx oldtag proto port target current_count
   for line in "${inv_lines[@]}"; do
     IFS=$'	' read -r idx oldtag proto port <<< "$line"
     target="$(entry_key_from_parts "$proto" "$port")" || continue
@@ -1663,7 +1616,7 @@ normalize_takeover() {
     fi
 
     local -a user_lines=() relay_names=() direct_candidates=()
-    local user_line uidx uname relay_line relay_user out_tag land new_user new_out direct_old
+    local user_line uidx uname relay_user out_tag land new_user new_out direct_old
 
     mapfile -t user_lines < <(echo "$work_json" | jq -r --argjson idx "$idx" '.inbounds[$idx].users // [] | to_entries[] | [.key, (.value.name // "")] | @tsv')
     mapfile -t relay_names < <(relay_list_table "$work_json" | awk -F '	' -v ek="$target" '$1 == ek {print $2}')
@@ -1837,7 +1790,7 @@ protocol_install_menu() {
   mapfile -t choice_arr < <(parse_plus_selections "${sel:-}")
   [ ${#choice_arr[@]} -eq 0 ] && { warn "未选择任何模块，已返回上一级。"; pause; return 0; }
 
-  local c port listen sni path priv sid entry_key inbound invalid=0
+  local c port listen sni path priv sid entry_key inbound
   for c in "${choice_arr[@]}"; do
     if ! [[ "$c" =~ ^[0-9]+$ ]] || [ "$c" -lt 1 ] || [ "$c" -gt 6 ]; then
       warn "无效模块编号：$c，已返回上一级。"
@@ -2064,14 +2017,12 @@ system_tools_menu() {
     clear
     print_rect_title "系统工具"
     echo -e "  ${C}1.${NC} 一键同步系统时间"
-    echo -e "  ${C}2.${NC} 查看 sing-box 服务状态"
-    echo -e "  ${C}3.${NC} 规范化接管"
+    echo -e "  ${C}2.${NC} 规范化接管"
     echo -e "  ${R}0.${NC} 返回主菜单"
     read -r -p "请选择操作: " act
     case "${act:-}" in
       1) sync_system_time_chrony ;;
-      2) show_service_status ;;
-      3) normalize_takeover ;;
+      2) normalize_takeover ;;
       0|q|Q|"") return 0 ;;
       *) warn "无效输入：$act"; sleep 1 ;;
     esac
@@ -2087,7 +2038,6 @@ view_config_formatted() {
   pause
 }
 
-
 # ====================================================
 # 900 Main menu
 # ====================================================
@@ -2095,7 +2045,7 @@ main_menu() {
   ensure_sb_shortcut >/dev/null 2>&1 || true
   while true; do
     clear
-    print_rect_title "Sing-box Elite 管理系统  V3.0.14"
+    print_rect_title "Sing-box Elite 管理系统  V${SCRIPT_VERSION}"
     echo -e "  ${C}1.${NC} 安装/更新 sing-box"
     echo -e "  ${C}2.${NC} 清空/重置 config.json"
     echo -e "  ${C}3.${NC} 查看配置文件"
