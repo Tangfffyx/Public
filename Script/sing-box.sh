@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # ====================================================
 # Project : Sing-box Elite Management System
-# Version : 3.0.0
+# Version : 3.0.5
 # Notes   : Single-file refactor, managed-route rebuild, no legacy compatibility.
 # ====================================================
 
@@ -440,52 +440,235 @@ list_entry_keys() {
   echo "$json" | jq -r '.inbounds[]?.tag // empty' | awk 'NF' | sort -u
 }
 
+protocol_entry_inventory() {
+  local json="$1"
+  echo "$json" | jq -r '
+    .inbounds[]?
+    | (
+        if .type == "vless" and (.tls.reality.enabled // false) then "vless-reality"
+        elif .type == "anytls" then "anytls"
+        elif .type == "shadowsocks" then "shadowsocks"
+        elif .type == "vmess" and ((.transport.type // "") == "ws") then "vmess-ws"
+        elif .type == "vless" and ((.transport.type // "") == "ws") then "vless-ws"
+        elif .type == "tuic" then "tuic"
+        else ""
+        end
+      ) as $proto
+    | select($proto != "")
+    | [(.tag // ""), $proto, ((.listen_port // 0) | tostring)]
+    | @tsv
+  '
+}
+
+inbound_protocol_name() {
+  local inbound="$1"
+  echo "$inbound" | jq -r '
+    if .type == "vless" and (.tls.reality.enabled // false) then "vless-reality"
+    elif .type == "anytls" then "anytls"
+    elif .type == "shadowsocks" then "shadowsocks"
+    elif .type == "vmess" and ((.transport.type // "") == "ws") then "vmess-ws"
+    elif .type == "vless" and ((.transport.type // "") == "ws") then "vless-ws"
+    elif .type == "tuic" then "tuic"
+    else ""
+    end
+  '
+}
+
+remove_relays_by_user_names() {
+  local json="$1" users_json="$2"
+  local relay_outbounds_json updated_json
+
+  relay_outbounds_json="$(
+    echo "$json" | jq -c --argjson users "$users_json" '
+      def auth_users_array:
+        if (.auth_user? == null) then []
+        elif ((.auth_user | type) == "array") then .auth_user
+        else [ .auth_user ]
+        end;
+
+      (
+        [
+          .route.rules[]?
+          | select((auth_users_array | any(. as $u | (($users | index($u)) != null))))
+          | .outbound // empty
+          | select(. != "" and . != "direct")
+        ]
+        + [
+            ($users // [])[] as $u
+            | (["out-" + $u] + (if ($u | test(".*-to-.+")) then ["out-to-" + (($u | capture(".*-to-(?<land>.+)$").land))] else [] end))[] as $cand
+            | .outbounds[]?
+            | .tag // empty
+            | select(. == $cand)
+          ]
+      ) | unique
+    '
+  )" || return 1
+
+  updated_json="$(
+    echo "$json" | jq --argjson users "$users_json" '
+      .inbounds |= map(
+        if .users? then
+          .users |= map(select(((.name // "") as $n | ($users | index($n))) == null))
+        else . end
+      )
+      | .route.rules |= map(
+          select(
+            (
+              .auth_user? as $au
+              | if $au == null then true
+                else
+                  (
+                    if ($au | type) == "array" then $au else [ $au ] end
+                  ) as $arr
+                  | any($arr[]; . as $u | (($users | index($u)) != null)) | not
+                end
+            )
+          )
+        )
+    '
+  )" || return 1
+
+  echo "$updated_json" | jq --argjson outs "$relay_outbounds_json" '
+    . as $root
+    | .outbounds |= map(
+        (.tag // "") as $tag
+        | select(
+            (
+              (($outs | index($tag)) != null)
+              and (([$root.route.rules[]? | .outbound // empty] | index($tag)) == null)
+            ) | not
+          )
+      )
+  ' || return 1
+}
+
 list_relay_users() {
   local json="$1"
-  echo "$json" | jq -r '.inbounds[]? | (.users // [])[]? | .name // empty' | grep -E '^(reality|anytls|ss|vmess-ws|vless-ws|tuic)-[0-9]+-to-' || true
+  relay_list_table "$json" | awk -F '	' 'NF >= 2 {print $2}' | awk 'NF' | sort -u
 }
 
 route_rebuild() {
   local json="$1"
-  local normalized core_users_json relay_rules_json user out
+  local normalized managed_users_json relay_pairs_json relay_users_json direct_users_json preserved_rules_json
 
-  normalized="$(config_normalize "$json")"
+  normalized="$(config_normalize "$json")" || return 1
 
-  core_users_json="$({
+  managed_users_json="$({
     echo "$normalized" | jq -r '
       .inbounds[]?
-      | .tag as $entry
       | (.users // [])[]?
       | .name // empty
-      | select(. == $entry)
     '
-  } | awk 'NF' | sort -u | jq -R . | jq -s '.')"
+  } | awk 'NF' | sort -u | jq -R . | jq -s '.')" || return 1
 
-  relay_rules_json="$({
-    while IFS= read -r user; do
-      [ -z "$user" ] && continue
-      out="$(relay_user_to_outbound "$user")"
-      jq -n --arg u "$user" --arg o "$out" '{auth_user:[$u],outbound:$o}'
-    done < <(list_relay_users "$normalized")
-  } | jq -s '.')"
+  relay_pairs_json="$(
+    echo "$normalized" | jq -c '
+      def auth_users_array:
+        if (.auth_user? == null) then []
+        elif ((.auth_user | type) == "array") then .auth_user
+        else [ .auth_user ]
+        end;
 
-  echo "$normalized" | jq --argjson core "$core_users_json" --argjson relay "$relay_rules_json" '
-    .route.rules = (
+      def inbound_proto:
+        if .type == "vless" and (.tls.reality.enabled // false) then "vless-reality"
+        elif .type == "anytls" then "anytls"
+        elif .type == "shadowsocks" then "shadowsocks"
+        elif .type == "vmess" and ((.transport.type // "") == "ws") then "vmess-ws"
+        elif .type == "vless" and ((.transport.type // "") == "ws") then "vless-ws"
+        elif .type == "tuic" then "tuic"
+        else ""
+        end;
+
+      . as $root
+      | [
+          .inbounds[]?
+          | select((inbound_proto) != "")
+          | .tag as $entry
+          | (.users // [])[]?
+          | (.name // empty) as $name
+          | select($name != "" and $name != $entry)
+          | [
+              $root.route.rules[]?
+              | select((auth_users_array | index($name)) != null)
+              | .outbound // empty
+              | select(. != "" and . != "direct")
+            ] as $outs
+          | select(($outs | length) > 0)
+          | {u:$name,o:$outs[0]}
+        ]
+      | unique_by(.u)
+    '
+  )" || return 1
+
+  relay_users_json="$(
+    echo "$normalized" | jq -c --argjson relay "$relay_pairs_json" '
+      [
+        .inbounds[]?
+        | .tag as $entry
+        | (.users // [])[]?
+        | (.name // empty) as $name
+        | select($name != "")
+        | select(
+            (($relay | map(.u) | index($name)) != null)
+            or (
+              $name != $entry
+              and ($name | test(".*-to-.+"))
+            )
+          )
+        | $name
+      ] | unique
+    '
+  )" || return 1
+
+  direct_users_json="$(
+    echo "$normalized" | jq -c --argjson relay_users "$relay_users_json" '
+      [
+        .inbounds[]?
+        | (.users // [])[]?
+        | (.name // empty) as $name
+        | select($name != "" and (($relay_users | index($name)) == null))
+        | $name
+      ] | unique
+    '
+  )" || return 1
+
+  preserved_rules_json="$(
+    echo "$normalized" | jq -c --argjson managed "$managed_users_json" '
+      def auth_users_array:
+        if (.auth_user? == null) then []
+        elif ((.auth_user | type) == "array") then .auth_user
+        else [ .auth_user ]
+        end;
+
       [
         .route.rules[]?
         | select(
-            (.auth_user? | not)
-            or (
-              .outbound? != "direct"
-              and ((.outbound? // "") | startswith("out-") | not)
-            )
+            (.auth_user? == null)
+            or ((auth_users_array | any(. as $u | ($managed | index($u)) == null)))
           )
       ]
-      + (if ($core|length) > 0 then [{auth_user:$core,outbound:"direct"}] else [] end)
-      + ($relay // [])
+    '
+  )" || return 1
+
+  echo "$normalized" | jq --argjson direct "$direct_users_json" --argjson relay "$relay_pairs_json" --argjson kept "$preserved_rules_json" '
+    .route.rules = (
+      ($kept // [])
+      + (if ($direct | length) > 0 then [{auth_user:$direct,outbound:"direct"}] else [] end)
+      + (($relay // []) | map({auth_user:[.u], outbound:.o}))
     )
-    | .route.rules |= unique_by((.outbound // "") + "|" + ((.auth_user // []) | sort | join(",")))
-  '
+    | .route.rules |= unique_by((.outbound // "") + "|" + (((.auth_user // []) | if type == "array" then . else [.] end | sort) | join(",")))
+    | . as $root
+    | .outbounds |= map(
+        (.tag // "") as $tag
+        | select(
+            (
+              ($tag != "direct")
+              and ($tag | startswith("out-"))
+              and (([$root.route.rules[]? | .outbound // empty] | index($tag)) == null)
+            ) | not
+          )
+      )
+  ' || return 1
 }
 
 protocol_transport_layer() {
@@ -542,57 +725,27 @@ entry_summary_lines() {
 # ====================================================
 protocol_status_summary() {
   local json="$1"
-  local all_lines proto label status ports
-  all_lines="$(echo "$json" | jq -r '
-    .inbounds[]?
-    | select((.tag // "") | test("^(reality|anytls|ss|vmess-ws|vless-ws|tuic)-[0-9]+$"))
-    | [(.tag // ""), ((.listen_port // 0)|tostring)]
-    | @tsv
-  ')"
+  local all_lines proto label ports
+  all_lines="$(protocol_entry_inventory "$json")"
 
   for proto in vless-reality anytls shadowsocks vmess-ws vless-ws tuic; do
-    case "$proto" in
-      vless-reality) label="vless-reality" ;;
-      anytls) label="anytls" ;;
-      shadowsocks) label="shadowsocks" ;;
-      vmess-ws) label="vmess-ws" ;;
-      vless-ws) label="vless-ws" ;;
-      tuic) label="tuic" ;;
-    esac
-
+    label="$proto"
     ports="$(printf '%s
-' "$all_lines" | awk -F '	' -v p="$proto" '
-      function map_label(tag) {
-        if (tag ~ /^reality-[0-9]+$/) return "vless-reality";
-        if (tag ~ /^anytls-[0-9]+$/) return "anytls";
-        if (tag ~ /^ss-[0-9]+$/) return "shadowsocks";
-        if (tag ~ /^vmess-ws-[0-9]+$/) return "vmess-ws";
-        if (tag ~ /^vless-ws-[0-9]+$/) return "vless-ws";
-        if (tag ~ /^tuic-[0-9]+$/) return "tuic";
-        return "";
-      }
-      NF >= 2 && map_label($1) == p { print $2 }
-    ' | sort -n | uniq | paste -sd'|' -)"
+' "$all_lines" | awk -F '	' -v p="$proto" 'NF >= 3 && $2 == p { print $3 }' | sort -n | uniq | paste -sd'|' -)"
 
     if [ -n "$ports" ]; then
-      status="已安装"
+      printf '%s	%s	%s
+' "$label" "已安装" "$ports"
     else
-      status="未安装"
+      printf '%s	%s	%s
+' "$label" "未安装" ""
     fi
-
-    printf '%s	%s	%s
-' "$label" "$status" "$ports"
   done
 }
 
 protocol_entry_table() {
   local json="$1"
-  echo "$json" | jq -r '
-    .inbounds[]?
-    | select((.tag // "") | test("^(reality|anytls|ss|vmess-ws|vless-ws|tuic)-[0-9]+$"))
-    | [(.tag // ""), (.type // ""), ((.listen_port // 0)|tostring)]
-    | @tsv
-  '
+  protocol_entry_inventory "$json"
 }
 
 show_managed_relay_lines() {
@@ -766,22 +919,97 @@ build_tuic_inbound() {
 
 remove_inbound_by_entry_key() {
   local json="$1" entry_key="$2"
-  echo "$json" | jq --arg ek "$entry_key" '
-    .inbounds |= map(select(.tag != $ek))
-    | .outbounds |= map(select(((.tag // "") | startswith("out-" + $ek + "-to-")) | not))
-  '
+  local inbound_users_json related_outbounds_json updated_json
+
+  inbound_users_json="$(
+    echo "$json" | jq -c --arg ek "$entry_key" '
+      [
+        .inbounds[]?
+        | select(.tag == $ek)
+        | (.users // [])[]?
+        | .name // empty
+        | select(. != "")
+      ]
+    '
+  )" || return 1
+
+  related_outbounds_json="$(
+    echo "$json" | jq -c --argjson users "$inbound_users_json" '
+      def auth_users_array:
+        if (.auth_user? == null) then []
+        elif ((.auth_user | type) == "array") then .auth_user
+        else [ .auth_user ]
+        end;
+
+      (
+        [
+          .route.rules[]?
+          | select((auth_users_array | any(. as $u | (($users | index($u)) != null))))
+          | .outbound // empty
+          | select(. != "" and . != "direct")
+        ]
+        + [
+            ($users // [])[] as $u
+            | (["out-" + $u] + (if ($u | test(".*-to-.+")) then ["out-to-" + (($u | capture(".*-to-(?<land>.+)$").land))] else [] end))[] as $cand
+            | .outbounds[]?
+            | .tag // empty
+            | select(. == $cand)
+          ]
+      ) | unique
+    '
+  )" || return 1
+
+  updated_json="$(
+    echo "$json" | jq --arg ek "$entry_key" --argjson users "$inbound_users_json" '
+      .inbounds |= map(select((.tag // "") != $ek))
+      | .route.rules |= map(
+          select(
+            (
+              .auth_user? as $au
+              | if $au == null then true
+                else
+                  (
+                    if ($au | type) == "array" then $au else [ $au ] end
+                  ) as $arr
+                  | any($arr[]; . as $u | (($users | index($u)) != null)) | not
+                end
+            )
+          )
+        )
+    '
+  )" || return 1
+
+  echo "$updated_json" | jq --argjson outs "$related_outbounds_json" '
+    . as $root
+    | .outbounds |= map(
+        (.tag // "") as $tag
+        | select(
+            (
+              (($outs | index($tag)) != null)
+              and (([$root.route.rules[]? | .outbound // empty] | index($tag)) == null)
+            ) | not
+          )
+      )
+  ' || return 1
 }
 
 remove_relays_for_entry_key() {
   local json="$1" entry_key="$2"
-  echo "$json" | jq --arg ek "$entry_key" '
-    .inbounds |= map(
-      if .users? then
-        .users |= map(select(((.name // "") | startswith($ek + "-to-")) | not))
-      else . end
-    )
-    | .outbounds |= map(select(((.tag // "") | startswith("out-" + $ek + "-to-")) | not))
-  '
+  local relay_users_json
+
+  relay_users_json="$(
+    echo "$json" | jq -c --arg ek "$entry_key" '
+      [
+        .inbounds[]?
+        | select(.tag == $ek)
+        | (.users // [])[]?
+        | .name // empty
+        | select(. != "" and . != $ek)
+      ]
+    '
+  )"
+
+  remove_relays_by_user_names "$json" "$relay_users_json"
 }
 
 # ====================================================
@@ -790,23 +1018,58 @@ remove_relays_for_entry_key() {
 relay_list_table() {
   local json="$1"
   echo "$json" | jq -r '
-    .inbounds[]?
-    | .tag as $entry
-    | (.users // [])[]?
-    | .name // empty
-    | select(test("^(reality|anytls|ss|vmess-ws|vless-ws|tuic)-[0-9]+-to-"))
-    | [$entry, ., ("out-" + .)]
+    def inbound_proto:
+      if .type == "vless" and (.tls.reality.enabled // false) then "vless-reality"
+      elif .type == "anytls" then "anytls"
+      elif .type == "shadowsocks" then "shadowsocks"
+      elif .type == "vmess" and ((.transport.type // "") == "ws") then "vmess-ws"
+      elif .type == "vless" and ((.transport.type // "") == "ws") then "vless-ws"
+      elif .type == "tuic" then "tuic"
+      else ""
+      end;
+
+    def auth_users_array:
+      if (.auth_user? == null) then []
+      elif ((.auth_user | type) == "array") then .auth_user
+      else [ .auth_user ]
+      end;
+
+    . as $root
+    | [
+        .inbounds[]?
+        | select((inbound_proto) != "")
+        | .tag as $entry
+        | (.users // [])[]?
+        | (.name // empty) as $name
+        | select($name != "" and $name != $entry)
+        | [
+            $root.route.rules[]?
+            | select((auth_users_array | index($name)) != null)
+            | .outbound // empty
+            | select(. != "" and . != "direct")
+          ] as $outs
+        | [
+            (["out-" + $name] + (if ($name | test(".*-to-.+")) then ["out-to-" + (($name | capture(".*-to-(?<land>.+)$").land))] else [] end))[] as $cand
+            | $root.outbounds[]?
+            | .tag // empty
+            | select(. == $cand)
+          ] as $fallback_outs
+        | select(($outs | length) > 0 or ($fallback_outs | length) > 0 or ($name | test(".*-to-.+")))
+        | [$entry, $name, (if ($outs | length) > 0 then $outs[0] elif ($fallback_outs | length) > 0 then $fallback_outs[0] else "" end)]
+      ]
+    | unique
+    | .[]
     | @tsv
-  '
+  ' || return 1
 }
 
 relay_add() {
   init_manager_env
-  local json entry_keys=() entry_key entry_line choice land ip pw normalized_pw relay_user out_tag inbound proto
+  local json lines=() entry_key choice land ip pw normalized_pw relay_user out_tag inbound proto
   json="$(config_load)"
 
-  mapfile -t entry_keys < <(list_entry_keys "$json")
-  if [ ${#entry_keys[@]} -eq 0 ]; then
+  mapfile -t lines < <(protocol_entry_table "$json")
+  if [ ${#lines[@]} -eq 0 ]; then
     err "当前没有任何主入站，请先在核心模块管理里安装协议。"
     pause
     return 1
@@ -815,11 +1078,10 @@ relay_add() {
   clear
   echo -e "${C}--- 添加/覆盖中转节点 ---${NC}"
   echo -e "${C}请选择主入站：${NC}"
-  local i=1
-  for entry_key in "${entry_keys[@]}"; do
-    inbound="$(find_inbound_by_entry_key "$json" "$entry_key")"
-    proto="$(echo "$inbound" | jq -r '.type')"
-    echo -e "  [$i] ${G}${entry_key}${NC}"
+  local i=1 tag port
+  for line in "${lines[@]}"; do
+    IFS=$'	' read -r tag proto port <<< "$line"
+    echo -e "  [$i] ${G}${tag}${NC}"
     i=$((i+1))
   done
   echo ""
@@ -831,14 +1093,13 @@ relay_add() {
   if [ -z "${choice:-}" ]; then
     return 0
   fi
-  if ! [[ "${choice:-}" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "${#entry_keys[@]}" ]; then
+  if ! [[ "${choice:-}" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "${#lines[@]}" ]; then
     warn "无效选择，已返回上一级。"
     pause
     return 0
   fi
-  entry_key="${entry_keys[$((choice-1))]}"
+  IFS=$'	' read -r entry_key _ _ <<< "${lines[$((choice-1))]}"
   inbound="$(find_inbound_by_entry_key "$json" "$entry_key")"
-  proto="$(echo "$inbound" | jq -r '.type')"
 
   read -r -p "落地标识 (如 sg01): " land
   [ -z "${land:-}" ] && { warn "已取消，返回上一级。"; pause; return 0; }
@@ -850,8 +1111,9 @@ relay_add() {
   relay_user="$(relay_user_name "$entry_key" "$land")"
   out_tag="$(relay_outbound_tag "$entry_key" "$land")"
 
-  local new_user new_out updated_json
-  case "$proto" in
+  local new_user new_out updated_json inbound_type
+  inbound_type="$(echo "$inbound" | jq -r '.type')"
+  case "$inbound_type" in
     vless)
       if echo "$inbound" | jq -e '.tls.reality.enabled == true' >/dev/null 2>&1; then
         new_user="$(jq -n --arg name "$relay_user" --arg uuid "$(sing-box generate uuid)" '{name:$name,uuid:$uuid,flow:"xtls-rprx-vision"}')"
@@ -872,7 +1134,7 @@ relay_add() {
       new_user="$(jq -n --arg name "$relay_user" --arg uuid "$(sing-box generate uuid)" --arg pass "$(openssl rand -base64 12)" '{name:$name,uuid:$uuid,password:$pass}')"
       ;;
     *)
-      err "不支持的主入站类型：$proto"
+      err "不支持的主入站类型：$inbound_type"
       pause
       return 1
       ;;
@@ -892,7 +1154,11 @@ relay_add() {
     | .outbounds += [$no]
   ')"
 
-  updated_json="$(route_rebuild "$updated_json")"
+  updated_json="$(route_rebuild "$updated_json")" || {
+    err "重建路由失败，已中止，未写入配置。"
+    pause
+    return 1
+  }
   if config_apply "$updated_json"; then
     ok "中转节点已添加/覆盖：$relay_user"
   else
@@ -917,7 +1183,7 @@ relay_delete() {
   echo -e "${R}--- 删除中转节点 ---${NC}"
   local i=1
   for line in "${lines[@]}"; do
-    IFS=$'\t' read -r entry relay_user out_tag <<< "$line"
+    IFS=$'	' read -r entry relay_user out_tag <<< "$line"
     echo -e " [$i] ${relay_user}"
     i=$((i+1))
   done
@@ -934,14 +1200,19 @@ relay_delete() {
       return 1
     fi
     idx=$((part-1))
-    IFS=$'\t' read -r entry relay_user out_tag <<< "${lines[$idx]}"
-    updated_json="$(echo "$updated_json" | jq --arg ru "$relay_user" --arg ot "$out_tag" '
-      .inbounds |= map(if .users? then .users |= map(select((.name // "") != $ru)) else . end)
-      | .outbounds |= map(select((.tag // "") != $ot))
-    ')"
+    IFS=$'	' read -r entry relay_user out_tag <<< "${lines[$idx]}"
+    updated_json="$(remove_relays_by_user_names "$updated_json" "$(jq -cn --arg u "$relay_user" '[$u]')")" || {
+      err "删除中转失败，已中止，未写入配置。"
+      pause
+      return 1
+    }
   done
 
-  updated_json="$(route_rebuild "$updated_json")"
+  updated_json="$(route_rebuild "$updated_json")" || {
+    err "重建路由失败，已中止，未写入配置。"
+    pause
+    return 1
+  }
   if ! config_apply "$updated_json"; then
     warn "删除中转失败，已返回上一级。"
   fi
@@ -983,21 +1254,25 @@ manage_relay_nodes() {
 # ====================================================
 export_collect_context() {
   local json="$1"
-  local ip v_pbk ws_domain vm_domain
+  local ip v_pbk ws_domain vm_domain inventory
   ip="$(get_public_ip)"
   v_pbk=""
   ws_domain="example.com"
   vm_domain="example.com"
+  inventory="$(protocol_entry_inventory "$json")"
 
-  if echo "$json" | jq -e '.inbounds[]? | select(.tag|startswith("reality-"))' >/dev/null 2>&1; then
+  if printf '%s
+' "$inventory" | awk -F '	' '$2 == "vless-reality" {found=1} END{exit !found}'; then
     read -r -p "请输入 Reality Public Key（默认: PUBLIC_KEY_MISSING）: " v_pbk
     v_pbk="${v_pbk:-PUBLIC_KEY_MISSING}"
   fi
-  if echo "$json" | jq -e '.inbounds[]? | select(.tag|startswith("vless-ws-"))' >/dev/null 2>&1; then
+  if printf '%s
+' "$inventory" | awk -F '	' '$2 == "vless-ws" {found=1} END{exit !found}'; then
     read -r -p "请输入 vless-ws 域名（默认: example.com）: " ws_domain
     ws_domain="${ws_domain:-example.com}"
   fi
-  if echo "$json" | jq -e '.inbounds[]? | select(.tag|startswith("vmess-ws-"))' >/dev/null 2>&1; then
+  if printf '%s
+' "$inventory" | awk -F '	' '$2 == "vmess-ws" {found=1} END{exit !found}'; then
     read -r -p "请输入 vmess-ws 域名（默认: example.com）: " vm_domain
     vm_domain="${vm_domain:-example.com}"
   fi
@@ -1008,13 +1283,14 @@ export_collect_context() {
 export_configs() {
   init_manager_env
   clear
-  local json ctx ip v_pbk ws_domain vm_domain
+  local json ctx ip v_pbk ws_domain vm_domain relay_users_nl
   json="$(config_load)"
   ctx="$(export_collect_context "$json")"
   ip="$(echo "$ctx" | jq -r '.ip')"
   v_pbk="$(echo "$ctx" | jq -r '.v_pbk')"
   ws_domain="$(echo "$ctx" | jq -r '.ws_domain')"
   vm_domain="$(echo "$ctx" | jq -r '.vm_domain')"
+  relay_users_nl="$(relay_list_table "$json" | awk -F '	' 'NF >= 2 {print $2}' | awk 'NF' | sort -u)"
 
   echo -e "${C}--- 节点配置导出 ---${NC}"
 
@@ -1023,9 +1299,10 @@ export_configs() {
   relay_tmp="$(mktemp)"
 
   while read -r inbound; do
-    local tag type port sni path sid method server_p
+    local tag type port sni path sid method server_p proto
     tag="$(echo "$inbound" | jq -r '.tag')"
     type="$(echo "$inbound" | jq -r '.type')"
+    proto="$(inbound_protocol_name "$inbound")"
     port="$(echo "$inbound" | jq -r '.listen_port')"
     sni="$(echo "$inbound" | jq -r '.tls.server_name // "www.icloud.com"')"
     path="$(echo "$inbound" | jq -r '.transport.path // "/"')"
@@ -1042,14 +1319,15 @@ export_configs() {
       [ -z "$name" ] && continue
       out_name="$name"
 
-      if [[ "$name" == *-to-* ]]; then
+      if printf '%s
+' "$relay_users_nl" | grep -Fxq "$name"; then
         target_file="$relay_tmp"
       else
         target_file="$direct_tmp"
       fi
 
-      case "$tag" in
-        reality-*)
+      case "$proto" in
+        vless-reality)
           [ -z "$uuid" ] && continue
           {
             echo -e "
@@ -1059,7 +1337,7 @@ ${W}[${out_name}]${NC}"
             echo -e " Quantumult X: vless=$ip:$port, method=none, password=$uuid, obfs=over-tls, obfs-host=$sni, reality-base64-pubkey=$v_pbk, reality-hex-shortid=$sid, vless-flow=${flow}, udp-relay=true, tag=${out_name}"
           } >> "$target_file"
           ;;
-        anytls-*)
+        anytls)
           [ -z "$pass" ] && continue
           {
             echo -e "
@@ -1069,7 +1347,7 @@ ${W}[${out_name}]${NC}"
             echo -e " Surge: ${out_name} = anytls, ${ip}, ${port}, password=${pass}, skip-cert-verify=true, sni=${sni}"
           } >> "$target_file"
           ;;
-        ss-*)
+        shadowsocks)
           [ -z "$pass" ] && continue
           if [ -n "$server_p" ] && [ "$server_p" != "$pass" ]; then pw_out="${server_p}:${pass}"; else pw_out="$pass"; fi
           {
@@ -1082,7 +1360,7 @@ ${W}[${out_name}]${NC}"
             echo -e " Surge: ${out_name} = ss, ${ip}, ${port}, encrypt-method=${method}, password=${pw_out}, udp-relay=true"
           } >> "$target_file"
           ;;
-        vmess-ws-*)
+        vmess-ws)
           [ -z "$uuid" ] && continue
           {
             echo -e "
@@ -1094,7 +1372,7 @@ ${W}[${out_name}]${NC}"
             echo -e " Surge: ${out_name} = vmess, ${ip}, 443, username=${uuid}, tls=true, vmess-aead=true, ws=true, ws-path=${path}?ed=2048, sni=${vm_domain}, ws-headers=Host:${vm_domain}, skip-cert-verify=false, udp-relay=true, tfo=false"
           } >> "$target_file"
           ;;
-        vless-ws-*)
+        vless-ws)
           [ -z "$uuid" ] && continue
           {
             echo -e "
@@ -1104,7 +1382,7 @@ ${W}[${out_name}]${NC}"
             echo -e " Quantumult X: vless=$ip:443,method=none,password=${uuid},obfs=wss,obfs-host=${ws_domain},obfs-uri=${path}?ed=2048,fast-open=false,udp-relay=true,tag=${out_name}"
           } >> "$target_file"
           ;;
-        tuic-*)
+        tuic)
           [ -z "$uuid" ] && continue
           [ -z "$pass" ] && continue
           {
@@ -1363,15 +1641,16 @@ config_health_check() {
     ok "未发现重复 entry_key。"
   fi
 
-  while IFS= read -r user; do
-    [ -z "$user" ] && continue
-    local out
-    out="$(relay_user_to_outbound "$user")"
-    if ! echo "$json" | jq -e --arg o "$out" '.outbounds[]? | select(.tag==$o)' >/dev/null 2>&1; then
-      err "中转用户缺少对应 outbound：$user -> $out"
+  while IFS=$'	' read -r _ relay_user out_tag; do
+    [ -z "$relay_user" ] && continue
+    if [ -z "$out_tag" ]; then
+      err "中转用户缺少对应 outbound：$relay_user"
+      problems=$((problems+1))
+    elif ! echo "$json" | jq -e --arg o "$out_tag" '.outbounds[]? | select(.tag==$o)' >/dev/null 2>&1; then
+      err "中转用户缺少对应 outbound：$relay_user -> $out_tag"
       problems=$((problems+1))
     fi
-  done < <(list_relay_users "$json")
+  done < <(relay_list_table "$json")
 
   if [ "$problems" -eq 0 ]; then
     ok "配置体检通过。"
@@ -1502,10 +1781,11 @@ protocol_remove_menu() {
     pause
     return 0
   fi
-  echo -e "\n${R}已安装核心模块如下（多个用 + 连接，如 1+2）:${NC}"
+  echo -e "
+${R}已安装核心模块如下（多个用 + 连接，如 1+2）:${NC}"
   local i=1
   for line in "${lines[@]}"; do
-    IFS=$'\t' read -r entry_key type port <<< "$line"
+    IFS=$'	' read -r entry_key type port <<< "$line"
     echo -e " [$i] ${entry_key}"
     i=$((i+1))
   done
@@ -1522,17 +1802,33 @@ protocol_remove_menu() {
   done
 
   for c in "${choice_arr[@]}"; do
-    IFS=$'\t' read -r entry_key _ <<< "${lines[$((c-1))]}"
-    related="$(list_relay_users "$updated_json" | grep -E "^${entry_key}-to-" || true)"
+    IFS=$'	' read -r entry_key _ <<< "${lines[$((c-1))]}"
+    related="$(relay_list_table "$updated_json" | awk -F '	' -v ek="$entry_key" '$1 == ek {print $2}')" || {
+      err "读取关联中转失败，已中止卸载。"
+      pause
+      return 1
+    }
     if [ -n "$related" ]; then
       warn "卸载 ${entry_key} 将同时删除以下关联中转："
       echo "$related" | sed 's/^/  - /'
     fi
-    updated_json="$(remove_relays_for_entry_key "$updated_json" "$entry_key")"
-    updated_json="$(remove_inbound_by_entry_key "$updated_json" "$entry_key")"
+    updated_json="$(remove_relays_for_entry_key "$updated_json" "$entry_key")" || {
+      err "删除关联中转失败，已中止，未写入配置。"
+      pause
+      return 1
+    }
+    updated_json="$(remove_inbound_by_entry_key "$updated_json" "$entry_key")" || {
+      err "删除核心模块失败，已中止，未写入配置。"
+      pause
+      return 1
+    }
   done
 
-  updated_json="$(route_rebuild "$updated_json")"
+  updated_json="$(route_rebuild "$updated_json")" || {
+    err "重建路由失败，已中止，未写入配置。"
+    pause
+    return 1
+  }
   if ! config_apply "$updated_json"; then
     warn "核心模块卸载失败，已返回上一级。"
   fi
@@ -1631,7 +1927,7 @@ main_menu() {
   ensure_sb_shortcut >/dev/null 2>&1 || true
   while true; do
     clear
-    print_rect_title "Sing-box Elite 管理系统  V3.0.0"
+    print_rect_title "Sing-box Elite 管理系统  V3.0.5"
     echo -e "  ${C}1.${NC} 安装/更新 sing-box"
     echo -e "  ${C}2.${NC} 清空/重置 config.json"
     echo -e "  ${C}3.${NC} 查看配置文件"
