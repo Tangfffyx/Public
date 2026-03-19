@@ -1,43 +1,15 @@
+# > 一些比较容易忽视的分流
+DOMAIN,ad.12306.cn,DIRECT
+DOMAIN,sdkapp.uve.weibo.com,DIRECT
+# RFC
+DOMAIN-KEYWORD,rfchost,DIRECT
+# 星云
+DOMAIN-KEYWORD,nebula-media,美国节点
+# nodeseek
+#DOMAIN-SUFFIX,nodeseek.com,PROXY
 # WeChat
-IP-ASN, 132203, direct
-
+IP-ASN,132203,DIRECT
 # 沉浸式翻译
-host-suffix, immersivetranslate.com, direct
-
-# 影视
-host-keyword, ikandy, direct
-host-suffix, freeok.vip, direct
-host-keyword, czzy, direct
-
-# SYN
-host, my.synn.cc, direct
-host, go.synn.cc, direct
-host, stream.synn.cc, SYN SP
-host, stream-zz.synn.cc, SYN SP
-
-# talktone
-host-suffix, tktn.be, proxy
-ip-cidr, 69.46.75.86/24, proxy
-ip-cidr, 205.164.56.27/24, proxy
-
+DOMAIN-SUFFIX,immersivetranslate.com,DIRECT
 # GoogleVoice
-host,lens.l.google.com,🇺🇸
-
-# 一些比较容易忽视的分流
-host-suffix, speedtest.cn, direct
-host, ad.12306.cn, direct
-host, gg.caixin.com, direct
-host, sdkapp.uve.weibo.com, direct
-host-suffix, ucweb.com, direct
-host-suffix, kuwo.cn, direct
-host, ntb.lanjie100.com, reject
-
-# B站换区
-ip-cidr, 203.107.1.1/24, reject
-
-# Pikpak
-host, access.mypikpak.com, reject
-host-suffix, mypikpak.com, Static
-
-# 贴吧屏蔽域名dns查询
-IP-CIDR,180.76.76.200/32,REJECT
+DOMAIN,lens.l.google.com,美国节点
