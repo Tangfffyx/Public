@@ -1,31 +1,33 @@
 #!/bin/bash
 # Debian/Ubuntu 网络参数优化与 BBR 开启脚本
-# 包含自动备份与一键恢复功能
+# 包含自动备份与一键恢复功能 (已修复全局配置处理)
 
-# 定义路径变量
 CONF_FILE="/etc/sysctl.d/99-z-network-optimize.conf"
 BACKUP_DIR="/etc/sysctl.d/.network_backup"
 
-# 强制 root 权限运行检测
 if [ "$EUID" -ne 0 ]; then
-  echo "❌ 错误: 请使用 root 权限运行此脚本 (例如: sudo bash $0)"
+  echo "❌ 错误: 请使用 root 权限运行此脚本"
   exit 1
 fi
 
-# ==========================================
-# 安装与优化逻辑
-# ==========================================
 install_optimize() {
     echo "🚀 开始部署网络优化参数..."
 
-    # 1. 创建隐藏的备份目录
     if [ ! -d "$BACKUP_DIR" ]; then
         mkdir -p "$BACKUP_DIR"
     fi
 
+    # 【新增修复】1. 处理全局 /etc/sysctl.conf
+    if [ -f "/etc/sysctl.conf" ]; then
+        echo "📦 正在备份全局配置文件 /etc/sysctl.conf ..."
+        cp "/etc/sysctl.conf" "$BACKUP_DIR/sysctl.conf.bak"
+        # 清空原文件，防止里面的参数与我们的配置打架，但保留空文件以免系统报错
+        > "/etc/sysctl.conf" 
+    fi
+
     # 2. 隔离并备份潜在冲突文件 (99- 开头的文件)
-    # 为什么要用 99-z？因为字典序中 z 排在最后，它必定会覆盖系统的 99-sysctl.conf
     for file in /etc/sysctl.d/99-*.conf; do
+        # 排除我们要写入的目标文件，防止死循环或误删
         if [ -f "$file" ] && [ "$file" != "$CONF_FILE" ]; then
             echo "📦 发现潜在冲突文件: $file，正在移至备份目录..."
             mv "$file" "$BACKUP_DIR/"
@@ -80,9 +82,6 @@ EOF
     echo "✅ 优化完成！当前系统已成功开启 BBR 并接管网络参数。"
 }
 
-# ==========================================
-# 卸载与恢复逻辑
-# ==========================================
 uninstall_restore() {
     echo "🧹 开始卸载优化参数并恢复系统原状..."
 
@@ -90,31 +89,34 @@ uninstall_restore() {
     if [ -f "$CONF_FILE" ]; then
         rm -f "$CONF_FILE"
         echo "🗑️ 已删除优化文件: $CONF_FILE"
-    else
-        echo "⚠️ 未找到优化文件，可能尚未安装。"
     fi
 
-    # 2. 从备份目录中释放被隔离的文件
-    if [ -d "$BACKUP_DIR" ] && [ "$(ls -A $BACKUP_DIR 2>/dev/null)" ]; then
-        echo "♻️ 正在将原有的配置文件恢复原位..."
-        mv "$BACKUP_DIR"/* /etc/sysctl.d/
+    # 【新增修复】2. 恢复全局 /etc/sysctl.conf
+    if [ -f "$BACKUP_DIR/sysctl.conf.bak" ]; then
+        echo "♻️ 正在恢复全局配置文件 /etc/sysctl.conf ..."
+        mv "$BACKUP_DIR/sysctl.conf.bak" "/etc/sysctl.conf"
+    fi
+
+    # 3. 从备份目录中释放被隔离的 .conf 文件
+    if [ -d "$BACKUP_DIR" ]; then
+        # 检查是否还有其他文件需要恢复 (排除刚才已经 mv 走的 sysctl.conf.bak)
+        if [ "$(ls -A $BACKUP_DIR 2>/dev/null)" ]; then
+            echo "♻️ 正在将 /etc/sysctl.d/ 中的原配置文件恢复原位..."
+            mv "$BACKUP_DIR"/* /etc/sysctl.d/ 2>/dev/null
+        fi
+        # 清理空备份目录
         rm -rf "$BACKUP_DIR"
-        echo "✅ 备份文件已完全恢复。"
-    else
-        echo "ℹ️ 没有找到需要恢复的备份文件。"
+        echo "✅ 所有备份文件已完全恢复。"
     fi
 
-    # 3. 重新加载原来的参数
+    # 4. 重新加载原来的参数
     echo "🔄 正在重载原始 sysctl 配置..."
     sysctl --system > /dev/null 2>&1
 
     echo ""
-    echo "✅ 恢复完成！系统已回到运行优化脚本前的状态。"
+    echo "✅ 恢复完成！系统已完美回到你运行优化脚本前的状态。"
 }
 
-# ==========================================
-# 脚本菜单入口
-# ==========================================
 case "$1" in
     install)
         install_optimize
