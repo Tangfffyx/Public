@@ -1,13 +1,14 @@
 #!/bin/bash
 # Debian/Ubuntu 网络参数优化与 BBR 开启脚本
-# 包含自动备份与一键恢复功能 (已修复全局配置处理)
+# 包含自动备份与一键恢复功能 (完美最终版)
 
 CONF_FILE="/etc/sysctl.d/99-z-network-optimize.conf"
 BACKUP_DIR="/etc/sysctl.d/.network_backup"
+MODULE_FILE="/etc/modules-load.d/bbr.conf"
 
 if [ "$EUID" -ne 0 ]; then
-  echo "❌ 错误: 请使用 root 权限运行此脚本"
-  exit 1
+    echo "❌ 错误: 请使用 root 权限运行此脚本"
+    exit 1
 fi
 
 install_optimize() {
@@ -17,31 +18,31 @@ install_optimize() {
         mkdir -p "$BACKUP_DIR"
     fi
 
-    # 【新增修复】1. 处理全局 /etc/sysctl.conf    
-    # 【修复后的全局配置备份逻辑】
+    # 1. 唤醒并加载 BBR 内核模块 (进阶兼容性优化)
+    echo "⚙️ 正在加载 tcp_bbr 内核模块..."
+    modprobe tcp_bbr 2>/dev/null
+    echo "tcp_bbr" > "$MODULE_FILE"
+
+    # 2. 处理全局 /etc/sysctl.conf
     if [ -f "/etc/sysctl.conf" ]; then
-        # 增加一层判断：只有当备份文件不存在时，才执行备份！
         if [ ! -f "$BACKUP_DIR/sysctl.conf.bak" ]; then
             echo "📦 正在备份全局配置文件 /etc/sysctl.conf ..."
             cp "/etc/sysctl.conf" "$BACKUP_DIR/sysctl.conf.bak"
         else
             echo "ℹ️ 检测到全局配置备份已存在，跳过备份以保护原数据。"
         fi
-        
-        # 无论是否刚刚备份，都确保当前系统的主文件是空的，防止干扰
-        > "/etc/sysctl.conf" 
+        > "/etc/sysctl.conf"
     fi
 
-    # 2. 隔离并备份潜在冲突文件 (99- 开头的文件)
+    # 3. 隔离并备份潜在冲突文件
     for file in /etc/sysctl.d/99-*.conf; do
-        # 排除我们要写入的目标文件，防止死循环或误删
         if [ -f "$file" ] && [ "$file" != "$CONF_FILE" ]; then
             echo "📦 发现潜在冲突文件: $file，正在移至备份目录..."
             mv "$file" "$BACKUP_DIR/"
         fi
     done
 
-    # 3. 写入终极配置
+    # 4. 写入终极配置
     echo "✍️ 正在写入独占优化配置到 $CONF_FILE ..."
     cat > "$CONF_FILE" << 'EOF'
 # ==========================================
@@ -81,7 +82,7 @@ net.ipv6.conf.default.forwarding= 1
 net.ipv4.conf.all.route_localnet= 1
 EOF
 
-    # 4. 重载内核参数生效
+    # 5. 重载内核参数生效
     echo "🔄 正在重载 sysctl 使配置生效..."
     sysctl --system > /dev/null 2>&1
 
@@ -92,31 +93,34 @@ EOF
 uninstall_restore() {
     echo "🧹 开始卸载优化参数并恢复系统原状..."
 
-    # 1. 删除我们的专属优化文件
+    # 1. 删除开机自启的 BBR 模块配置
+    if [ -f "$MODULE_FILE" ]; then
+        rm -f "$MODULE_FILE"
+    fi
+
+    # 2. 删除我们的专属优化文件
     if [ -f "$CONF_FILE" ]; then
         rm -f "$CONF_FILE"
         echo "🗑️ 已删除优化文件: $CONF_FILE"
     fi
 
-    # 【新增修复】2. 恢复全局 /etc/sysctl.conf
+    # 3. 恢复全局 /etc/sysctl.conf
     if [ -f "$BACKUP_DIR/sysctl.conf.bak" ]; then
         echo "♻️ 正在恢复全局配置文件 /etc/sysctl.conf ..."
         mv "$BACKUP_DIR/sysctl.conf.bak" "/etc/sysctl.conf"
     fi
 
-    # 3. 从备份目录中释放被隔离的 .conf 文件
+    # 4. 从备份目录中释放被隔离的 .conf 文件
     if [ -d "$BACKUP_DIR" ]; then
-        # 检查是否还有其他文件需要恢复 (排除刚才已经 mv 走的 sysctl.conf.bak)
         if [ "$(ls -A $BACKUP_DIR 2>/dev/null)" ]; then
             echo "♻️ 正在将 /etc/sysctl.d/ 中的原配置文件恢复原位..."
             mv "$BACKUP_DIR"/* /etc/sysctl.d/ 2>/dev/null
         fi
-        # 清理空备份目录
         rm -rf "$BACKUP_DIR"
         echo "✅ 所有备份文件已完全恢复。"
     fi
 
-    # 4. 重新加载原来的参数
+    # 5. 重新加载原来的参数
     echo "🔄 正在重载原始 sysctl 配置..."
     sysctl --system > /dev/null 2>&1
 
