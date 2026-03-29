@@ -17,11 +17,18 @@ install_optimize() {
         mkdir -p "$BACKUP_DIR"
     fi
 
-    # 【新增修复】1. 处理全局 /etc/sysctl.conf
+    # 【新增修复】1. 处理全局 /etc/sysctl.conf    
+    # 【修复后的全局配置备份逻辑】
     if [ -f "/etc/sysctl.conf" ]; then
-        echo "📦 正在备份全局配置文件 /etc/sysctl.conf ..."
-        cp "/etc/sysctl.conf" "$BACKUP_DIR/sysctl.conf.bak"
-        # 清空原文件，防止里面的参数与我们的配置打架，但保留空文件以免系统报错
+        # 增加一层判断：只有当备份文件不存在时，才执行备份！
+        if [ ! -f "$BACKUP_DIR/sysctl.conf.bak" ]; then
+            echo "📦 正在备份全局配置文件 /etc/sysctl.conf ..."
+            cp "/etc/sysctl.conf" "$BACKUP_DIR/sysctl.conf.bak"
+        else
+            echo "ℹ️ 检测到全局配置备份已存在，跳过备份以保护原数据。"
+        fi
+        
+        # 无论是否刚刚备份，都确保当前系统的主文件是空的，防止干扰
         > "/etc/sysctl.conf" 
     fi
 
