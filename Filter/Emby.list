@@ -1,28 +1,11 @@
 # 大V
 DOMAIN-SUFFIX,viclub.top
 
-# 熊猫
-DOMAIN-SUFFIX,pandtv.de
-DOMAIN-SUFFIX,pdtvs.de
-
 # 桃子
 DOMAIN-SUFFIX,embymv.link
 
-# 终点站
-DOMAIN-SUFFIX,emby.wtf
-
-# Misty
-DOMAIN,misty.cx
-
 # SYN
 DOMAIN-SUFFIX,synn.cc
-
-# CC
-DOMAIN-SUFFIX,coemn.com
-DOMAIN-SUFFIX,carryz.net
-
-# 星云
-DOMAIN-KEYWORD,nebula-media
 
 # 守候
 DOMAIN-SUFFIX,cn2gias.uk
